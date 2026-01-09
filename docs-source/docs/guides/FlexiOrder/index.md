@@ -185,12 +185,6 @@ trade = NubraTrader(nubra, version="V2")
 # NSE Month Codes
 # =====================================================
 
-MONTH_CODE_WEEKLY = {
-    1: "J", 2: "F", 3: "M", 4: "A",
-    5: "M", 6: "J", 7: "J", 8: "A",
-    9: "S", 10: "O", 11: "N", 12: "D"
-}
-
 MONTH_CODE_MONTHLY = {
     1: "JAN", 2: "FEB", 3: "MAR", 4: "APR",
     5: "MAY", 6: "JUN", 7: "JUL", 8: "AUG",
@@ -214,6 +208,7 @@ def build_option_symbol(
 ) -> Dict[str, str]:
     """
     Builds NSE option trading symbol and attaches BUY/SELL side.
+    Weekly expiry uses numeric month without zero-padding.
     """
 
     underlying = underlying.upper().strip()
@@ -236,7 +231,7 @@ def build_option_symbol(
         symbol = (
             f"{underlying}"
             f"{year_short}"
-            f"{MONTH_CODE_WEEKLY[month]}"
+            f"{month}"        # 👈 no zero padding
             f"{day:02d}"
             f"{strike}"
             f"{option_type}"
@@ -254,6 +249,7 @@ def build_option_symbol(
     else:
         raise ValueError("expiry_type must be weekly or monthly")
 
+    print(symbol)
     return {
         "symbol": symbol,
         "side": side
@@ -337,9 +333,9 @@ symbols = [
         underlying="NIFTY",
         strike=26700,
         option_type="CE",
-        year=2025,
-        month=12,
-        day=23,
+        year=2026,
+        month=1,
+        day=13,
         expiry_type="weekly",
         side="BUY"
     ),
@@ -347,9 +343,9 @@ symbols = [
         underlying="NIFTY",
         strike=24900,
         option_type="PE",
-        year=2025,
-        month=12,
-        day=23,
+        year=2026,
+        month=1,
+        day=13,
         expiry_type="weekly",
         side="BUY"
     ),
@@ -357,9 +353,9 @@ symbols = [
         underlying="NIFTY",
         strike=24700,
         option_type="PE",
-        year=2025,
-        month=12,
-        day=23,
+        year=2026,
+        month=1,
+        day=13,
         expiry_type="weekly",
         side="BUY"
     )
@@ -370,7 +366,7 @@ symbols = [
 # =====================================================
 basket = place_flexi_basket(
     symbols=symbols,
-    order_qty=75,
+    order_qty=65,
     basket_name="AutoBuiltFlexiStrategy",
     tag="auto_entry",
     exchange = ExchangeEnum.NSE,
@@ -380,5 +376,4 @@ basket = place_flexi_basket(
 
 print("Basket ID:", basket.basket_id)
 print("Basket Orders:", basket.orders)
-
 ```

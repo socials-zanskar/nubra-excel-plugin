@@ -44,49 +44,49 @@ instruments_df = instruments.get_instruments_dataframe(exchange="BSE")
 ## Basic Usage
 
 === "Python"
-    ```python
-    from nubra_python_sdk.refdata.instruments import InstrumentData
-    from nubra_python_sdk.start_sdk import InitNubraSdk, NubraEnv
+```python
+from nubra_python_sdk.refdata.instruments import InstrumentData
+from nubra_python_sdk.start_sdk import InitNubraSdk, NubraEnv
 
-    # Initialize the Nubra SDK client
-    # Use NubraEnv.UAT for testing or NubraEnv.PROD for production
-    nubra = InitNubraSdk(NubraEnv.UAT)  # or NubraEnv.PROD
+# Initialize the Nubra SDK client
+# Use NubraEnv.UAT for testing or NubraEnv.PROD for production
+nubra = InitNubraSdk(NubraEnv.UAT)  # or NubraEnv.PROD
 
-    ##using totp login and .env file 
-    #nubra = InitNubraSdk(NubraEnv.UAT, totp_login= True ,env_creds = True) 
+##using totp login and .env file 
+#nubra = InitNubraSdk(NubraEnv.UAT, totp_login= True ,env_creds = True) 
 
-    # Initialize instruments master data with the client
-    instruments = InstrumentData(nubra)
+# Initialize instruments master data with the client
+instruments = InstrumentData(nubra)
 
-    # Get all instruments as a pandas DataFrame
-    instruments_df = instruments.get_instruments_dataframe()
-    print(f"Total instruments: {len(instruments_df)}\n\n")
+# Get all instruments as a pandas DataFrame
+instruments_df = instruments.get_instruments_dataframe()
+print(f"Total instruments: {len(instruments_df)}\n\n")
 
-    # Get instrument by reference ID. Internal Reference ID from Nubra.
-    instrument = instruments.get_instrument_by_ref_id(69694)
-    print(f"Instrument details: {instrument}\n\n")
+# Get instrument by reference ID. Internal Reference ID from Nubra.
+instrument = instruments.get_instrument_by_ref_id(69694)
+print(f"Instrument details: {instrument}\n\n")
 
-    # Get instrument by instrument trading symbol eg: HDFCBANK25MAY2380CE, TATAMOTORS, NIFTY2550822400PE and exchange= "NSE"/"BSE"
-    instrument = instruments.get_instrument_by_symbol("HDFCBANK", exchange= "BSE")
-    print(f"Instrument details: {instrument}\n\n")
+# Get instrument by instrument trading symbol eg: HDFCBANK25MAY2380CE, TATAMOTORS, NIFTY2550822400PE and exchange= "NSE"/"BSE"
+instrument = instruments.get_instrument_by_symbol("HDFCBANK", exchange= "BSE")
+print(f"Instrument details: {instrument}\n\n")
 
-    # Get instrument by nubra defined name of instrument eg: STOCK_HDFCBANK.NSECM, STOCK_HDFCBANK and exchange= "NSE"/"BSE"
-    instrument = instruments.get_instrument_by_nubra_name("STOCK_HDFCBANK.NSECM",exchange= "NSE") 
-    print(f"Instrument details: {instrument}\n\n")
+# Get instrument by nubra defined name of instrument eg: STOCK_HDFCBANK.NSECM, STOCK_HDFCBANK and exchange= "NSE"/"BSE"
+instrument = instruments.get_instrument_by_nubra_name("STOCK_HDFCBANK.NSECM",exchange= "NSE") 
+print(f"Instrument details: {instrument}\n\n")
 
-    # Fetch multiple instruments matching the pattern passed
-    instruments = instruments.get_instruments_by_pattern([{
-            "exchange": "NSE",
-            "asset": "NIFTY",
-            "derivative_type": "OPT",
-            "expiry":"20250522",
-            "strike_price": "24000",
-            "option_type": "CE",
-            "asset_type": "INDEX_FO"
-        }]
-    )
-    print(f"Instrument details: {instruments}\n\n")
-    ```
+# Fetch multiple instruments matching the pattern passed
+instruments = instruments.get_instruments_by_pattern([{
+        "exchange": "NSE",
+        "asset": "NIFTY",
+        "derivative_type": "OPT",
+        "expiry":"20250522",
+        "strike_price": "24000",
+        "option_type": "CE",
+        "asset_type": "INDEX_FO"
+    }]
+)
+print(f"Instrument details: {instruments}\n\n")
+```
 
 ## Available Methods in SDK
 
@@ -150,81 +150,81 @@ instruments_df = instruments.get_instruments_dataframe(exchange="BSE")
 Since the reference data is returned as a pandas DataFrame, you can easily filter and query the data. Here's an updated example of how you might implement a helper class:
 
 === "Python"
-    ```python
-    from nubra_python_sdk.refdata.instruments import InstrumentData
-    from nubra_python_sdk.start_sdk import InitNubraSdk
-    from typing import List, Optional, Dict, Any
+```python
+from nubra_python_sdk.refdata.instruments import InstrumentData
+from nubra_python_sdk.start_sdk import InitNubraSdk
+from typing import List, Optional, Dict, Any
 
-    class InstrumentFinder:
-        """
-        A utility class to find instruments using various filters.
-        This class can be imported and used in other scripts to find instruments
-        based on different criteria like exchange, asset, derivative type, etc.
-        """
-        def __init__(self):
-            self.client = InitNubraSdk()
-            self.instruments = InstrumentData(self.client)
-            self.instruments_df = None
-            self._load_reference_data()
+class InstrumentFinder:
+    """
+    A utility class to find instruments using various filters.
+    This class can be imported and used in other scripts to find instruments
+    based on different criteria like exchange, asset, derivative type, etc.
+    """
+    def __init__(self):
+        self.client = InitNubraSdk()
+        self.instruments = InstrumentData(self.client)
+        self.instruments_df = None
+        self._load_reference_data()
 
-        def _load_reference_data(self):
-            if self.instruments_df is None:
-                try:
-                    self.instruments_df = self.instruments.get_instruments_dataframe()
-                    if self.instruments_df is not None:
-                        self.instruments_df.set_index(['ref_id'], inplace=True)
-                except Exception as e:
-                    print(f"Error loading reference data: {e}")
-                    self.instruments_df = None
-
-        def get_instruments(self, 
-                           exchange: Optional[str] = None,
-                           asset: Optional[str] = None,
-                           derivative_type: Optional[str] = None,
-                           asset_type: Optional[str] = None,
-                           expiry: Optional[str] = None,
-                           strike_price: Optional[float] = None,
-                           option_type: Optional[str] = None) -> List[Dict[str, Any]]:
-            """
-            Find instruments based on the provided filters.
-            """
+    def _load_reference_data(self):
+        if self.instruments_df is None:
             try:
-                if self.instruments_df is None:
-                    self._load_reference_data()
-                    if self.instruments_df is None:
-                        return []
-                filtered_df = self.instruments_df.copy()
-                if exchange:
-                    filtered_df = filtered_df[filtered_df['exchange'] == exchange]
-                if asset:
-                    filtered_df = filtered_df[filtered_df['asset'] == asset]
-                if derivative_type:
-                    filtered_df = filtered_df[filtered_df['derivative_type'] == derivative_type]
-                if asset_type:
-                    filtered_df = filtered_df[filtered_df['asset_type'] == asset_type]
-                if expiry:
-                    filtered_df = filtered_df[filtered_df['expiry'] == expiry]
-                if strike_price is not None:
-                    filtered_df = filtered_df[filtered_df['strike_price'] == strike_price]
-                if option_type:
-                    filtered_df = filtered_df[filtered_df['option_type'] == option_type]
-                return filtered_df.reset_index().to_dict('records')
+                self.instruments_df = self.instruments.get_instruments_dataframe()
+                if self.instruments_df is not None:
+                    self.instruments_df.set_index(['ref_id'], inplace=True)
             except Exception as e:
-                print(f"Error finding instruments: {e}")
-                return []
+                print(f"Error loading reference data: {e}")
+                self.instruments_df = None
 
-    # Example usage
-    finder = InstrumentFinder()
-    instruments = finder.get_instruments(
-        exchange='NSE',
-        asset='HDFCBANK',
-        derivative_type='STOCK'
-    )
-    print(f"\nFound {len(instruments)} instruments for HDFCBANK stock:")
-    for instrument in instruments:
-        print(f"\nInstrument details:")
-        print(instrument)
-    ```
+    def get_instruments(self, 
+                        exchange: Optional[str] = None,
+                        asset: Optional[str] = None,
+                        derivative_type: Optional[str] = None,
+                        asset_type: Optional[str] = None,
+                        expiry: Optional[str] = None,
+                        strike_price: Optional[float] = None,
+                        option_type: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Find instruments based on the provided filters.
+        """
+        try:
+            if self.instruments_df is None:
+                self._load_reference_data()
+                if self.instruments_df is None:
+                    return []
+            filtered_df = self.instruments_df.copy()
+            if exchange:
+                filtered_df = filtered_df[filtered_df['exchange'] == exchange]
+            if asset:
+                filtered_df = filtered_df[filtered_df['asset'] == asset]
+            if derivative_type:
+                filtered_df = filtered_df[filtered_df['derivative_type'] == derivative_type]
+            if asset_type:
+                filtered_df = filtered_df[filtered_df['asset_type'] == asset_type]
+            if expiry:
+                filtered_df = filtered_df[filtered_df['expiry'] == expiry]
+            if strike_price is not None:
+                filtered_df = filtered_df[filtered_df['strike_price'] == strike_price]
+            if option_type:
+                filtered_df = filtered_df[filtered_df['option_type'] == option_type]
+            return filtered_df.reset_index().to_dict('records')
+        except Exception as e:
+            print(f"Error finding instruments: {e}")
+            return []
+
+# Example usage
+finder = InstrumentFinder()
+instruments = finder.get_instruments(
+    exchange='NSE',
+    asset='HDFCBANK',
+    derivative_type='STOCK'
+)
+print(f"\nFound {len(instruments)} instruments for HDFCBANK stock:")
+for instrument in instruments:
+    print(f"\nInstrument details:")
+    print(instrument)
+```
 
     ## Get Index Master
 

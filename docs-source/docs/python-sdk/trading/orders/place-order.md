@@ -199,6 +199,12 @@ In the context of the Orders API, enums specify permissible values for various o
         DAY = "DAY"
         IOC = "IOC"
 
+    class DeliveryTypeEnum(str, Enum):
+        """Enumerates delivery types for orders."""
+        ORDER_DELIVERY_TYPE_IDAY = "ORDER_DELIVERY_TYPE_IDAY"
+        ORDER_DELIVERY_TYPE_CNC = "ORDER_DELIVERY_TYPE_CNC"
+
+
     class PriceTypeEnumV2(str, Enum):
         LIMIT = "LIMIT"
         MARKET =" MARKET"
