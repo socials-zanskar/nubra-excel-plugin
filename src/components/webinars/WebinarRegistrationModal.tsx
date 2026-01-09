@@ -71,7 +71,7 @@ const WebinarRegistrationModal = ({
     handleRequestIntegration(data);
   };
   // Integration endpoint (same as used in IntegrationSection)
-  const INTEGRATION_API_URL = "https://nubra-dev.zanskar.xyz/api2/public/send_web_mail";
+  const INTEGRATION_API_URL = "https://api.nubra.io/public/send_web_mail";
   const [isSubmitting, setIsSubmitting] = useState(false);
   /**
    * buildIntegrationPayload
