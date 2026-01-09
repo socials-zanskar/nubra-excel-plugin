@@ -111,7 +111,7 @@ export const IntegrationSection = () => {
 
     try {
       const response = await fetch(
-        "https://api.nubra.io/public/send_web_mail",
+        "https://nubra-dev.zanskar.xyz/api2/public/send_web_mail",
         {
           method: "POST",
           headers: {
