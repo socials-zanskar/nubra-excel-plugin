@@ -1,4 +1,4 @@
 include:
   - project: devops/deployment
     ref: main
-    file: nubra-api-documnetation/gitlab/main.yml
+    file: nubra-api-documentation/gitlab/main.yml
