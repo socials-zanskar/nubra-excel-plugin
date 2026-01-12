@@ -1,0 +1,4 @@
+include:
+  - project: devops/deployment
+    ref: main
+    file: nubra-api-documnetation/gitlab/main.yml
