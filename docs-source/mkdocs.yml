@@ -80,6 +80,7 @@ nav:
       - Get Instruments: python-sdk/get-instruments.md
 
       - Market Data:
+          - Current Price: python-sdk/market-data/current-price.md
           - Market Quotes: python-sdk/market-data/market-quotes.md
           - Historical Market Data: python-sdk/market-data/historical-market-data.md
           - Option Chain: python-sdk/market-data/option-chain.md

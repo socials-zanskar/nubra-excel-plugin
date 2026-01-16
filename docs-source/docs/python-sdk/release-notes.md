@@ -2,6 +2,15 @@
 
 This document contains the release history and changes for the Nubra Python SDK.
 
+## Version 0.3.7
+
+### Features & Enhancements
+
+- **Positions API (V2 Support)**  
+  The Positions API now supports **V2**, with additional fields to provide clearer position-level visibility:
+  - **Buy Quantity** – Total quantity bought for the position
+  - **Sell Quantity** – Total quantity sold for the position  
+  
 ## Version 0.3.6
 ### Features & Enhancements
 
