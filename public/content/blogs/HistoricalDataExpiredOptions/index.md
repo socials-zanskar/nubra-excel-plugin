@@ -1,10 +1,10 @@
 ---
 title: "Historical Expired Options Data API: Backtesting with Greeks"
 summary: "Accessing historical data for expired options — including Greeks — is critical for building, validating, and refining robust options trading strategies. This post explains why expired options data matters, how Greeks behave into expiry, and how you can fetch historical expired option Greeks using Nubra’s API."
-tags: ["Options Trading", "Historical Data", "Greeks", "Backtesting", "NIFTY Options", "Strategy Building"]
+tags: ["Options Trading", "Historical Data", "Greeks"]
 readTime: "7 min"
 publishDate: "2026-01-16"
-author: "Nubra Engineering"
+author: "Akshay Navin: Algo Trader & Content Developer"
 ---
 
 ## Why Historical Expired Options Data Matters

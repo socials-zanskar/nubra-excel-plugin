@@ -1,10 +1,10 @@
 ---
 title: "Part 2: From Strategy Idea to Live Orders — LLM-Driven Algorithmic Trading"
 summary: "Learn how to generate, deploy, and execute algorithmic trading strategies using LLMs. This guide shows how natural-language strategies are converted into Python functions and executed live using Nubra’s trading engine."
-tags: ["Algorithmic Trading", "LLM", "Python", "Quant Trading", "Nubra", "Automation"]
+tags: ["Algorithmic Trading", "LLM", "Python", "Automation"]
 readTime: "12 min"
 publishDate: "2025-12-27"
-author: "Nubra Engineering"
+author: "Akshay Navin: Algo Trader & Content Developer"
 ---
 
 In Part 1, we built a production-grade market data pipeline with live WebSocket streaming, persistent tick storage, and clean OHLC candle generation.

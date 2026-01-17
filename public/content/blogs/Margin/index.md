@@ -4,7 +4,7 @@ summary: "Margin in trading is a dynamic risk construct, not a static balance. T
 tags: ["Margin", "Risk Management", "Algo Trading", "Derivatives", "Trading Infrastructure"]
 readTime: "6 min"
 publishDate: "2025-12-29"
-author: "Nubra Engineering"
+author: "Akshay Navin: Algo Trader & Content Developer"
 ---
 
 

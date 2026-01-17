@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NIFTY Options Projection Tool</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+
+<style>
+body { font-family: Arial, sans-serif; background:#111; color:#eee; }
+.container { display:flex; }
+svg { user-select:none; }
+
+.axis path,.axis line { stroke:#888; }
+.axis text { fill:#ccc; font-size:11px; }
+
+.candle.up { fill:#26a69a; }
+.candle.down { fill:#ef5350; }
+.wick { stroke-width:1; }
+
+.future-zone { fill:rgba(255,255,255,0.04); }
+
+.selection-box {
+  fill:rgba(66,165,245,0.25);
+  stroke:#42a5f5;
+  stroke-dasharray:4;
+}
+
+.price-label { fill:#fff; font-size:12px; font-weight:bold; }
+
+#right-panel { width:260px; margin-left:12px; }
+
+.strategy-btn {
+  background:#222; border:1px solid #444;
+  padding:6px; margin-bottom:4px;
+  cursor:pointer; font-size:12px;
+}
+.strategy-btn.active {
+  background:#42a5f5; color:#000; font-weight:bold;
+}
+
+/* ===============================
+   NEW: STRATEGY LEGS STYLES
+   =============================== */
+.strategy-legs-card {
+  background:#1b1b1b;
+  border:1px solid #333;
+  padding:8px;
+  margin-bottom:6px;
+  border-radius:4px;
+  font-size:12px;
+}
+
+.leg-row {
+  display:flex;
+  justify-content:space-between;
+  margin-bottom:4px;
+}
+
+.leg-buy { color:#26a69a; }
+.leg-sell { color:#ef5350; }
+.leg-type { opacity:0.85; }
+
+/* ===============================
+   NEW: PNL
+   =============================== */
+.strategy-metrics {
+  background:#151515;
+  border:1px solid #333;
+  border-radius:6px;
+  padding:8px;
+  margin-top:10px;
+  font-size:12px;
+}
+
+.metric-row {
+  display:flex;
+  justify-content:space-between;
+  margin-bottom:6px;
+}
+
+.metric-label { opacity:0.8; }
+.metric-profit { color:#26a69a; }
+.metric-loss { color:#ef5350; }
+.metric-unlimited { color:#ff9800; }
+
+</style>
+</head>
+
+<body>
+<h2>NIFTY Daily Candlestick (Forward Projection Only)</h2>
+
+<div class="container">
+  <svg id="chart"></svg>
+  <div id="right-panel">
+    <h4>Strategy</h4>
+    <div id="strategy-buttons"></div>
+
+    <!-- ===============================
+         NEW: LEGS PANEL
+         =============================== -->
+    <h4 style="margin-top:12px;">Legs</h4>
+    <div id="strategy-legs"></div>
+    <div id="strategy-metrics"></div>
+  </div>
+</div>
+
+<script>
+
+/* ===============================
+   STATIC OPTION CHAIN (MANUAL)
+   Strike → Call_LTP / Put_LTP
+   =============================== */
+
+const optionChain = {
+  24800: { call: 920.0,   put: 2.2   },
+  24850: { call: 859.25,  put: 2.45  },
+  24900: { call: 825.5,   put: 2.7   },
+  24950: { call: 761.95,  put: 3.2   },
+  25000: { call: 720.7,   put: 3.7   },
+  25050: { call: 672.55,  put: 4.2   },
+  25100: { call: 622.6,   put: 4.7   },
+  25150: { call: 574.1,   put: 5.35  },
+  25200: { call: 523.85,  put: 6.1   },
+  25250: { call: 477.55,  put: 7.2   },
+  25300: { call: 428.35,  put: 9.15  },
+  25350: { call: 380.0,   put: 11.9  },
+  25400: { call: 333.8,   put: 15.9  },
+  25450: { call: 290.95,  put: 21.15 },
+  25500: { call: 246.95,  put: 28.5  },
+  25550: { call: 207.3,   put: 38.8  },
+  25600: { call: 171.0,   put: 51.95 },
+  25650: { call: 138.0,   put: 69.15 },
+  25700: { call: 108.45,  put: 89.65 },
+  25750: { call: 84.0,    put: 115.0 },
+  25800: { call: 64.1,    put: 144.55},
+  25850: { call: 47.95,   put: 178.5 },
+  25900: { call: 35.3,    put: 215.2 },
+  25950: { call: 25.15,   put: 255.1 },
+  26000: { call: 18.2,    put: 298.0 },
+  26050: { call: 12.75,   put: 343.5 },
+  26100: { call: 8.85,    put: 388.8 },
+  26150: { call: 6.6,     put: 437.65},
+  26200: { call: 5.15,    put: 483.3 },
+  26250: { call: 4.05,    put: 534.9 },
+  26300: { call: 3.35,    put: 583.85},
+  26350: { call: 2.85,    put: 632.75},
+  26400: { call: 2.4,     put: 683.1 },
+  26450: { call: 2.05,    put: 723.3 },
+  26500: { call: 1.85,    put: 781.0 },
+  26550: { call: 1.6,     put: 829.35},
+  26600: { call: 1.45,    put: 869.0 },
+  26650: { call: 1.35,    put: 924.75},
+  26700: { call: 1.25,    put: 990.85},
+  26750: { call: 1.3,     put: 1030.7},
+  26800: { call: 1.2,     put: 1080.0},
+  26850: { call: 1.05,    put: 1137.2},
+  26900: { call: 1.05,    put: 1187.0},
+  26950: { call: 1.0,     put: 1180.7},
+  27000: { call: 0.95,    put: 1278.0}
+};
+
+
+/* -------------------------------
+   DATA
+-------------------------------- */
+const rawData = [
+  {date:"2025-12-01", open:26325.8, high:26325.8, low:26124.2, close:26175.75},
+  {date:"2025-12-02", open:26087.95, high:26154.6, low:25997.85, close:26032.2},
+  {date:"2025-12-03", open:26004.9, high:26066.45, low:25891, close:25986},
+  {date:"2025-12-04", open:25981.85, high:26098.25, low:25938.95, close:26033.75},
+  {date:"2025-12-05", open:25999.8, high:26202.6, low:25985.35, close:26186.45},
+  {date:"2025-12-08", open:26159.8, high:26178.7, low:25892.25, close:25960.55},
+  {date:"2025-12-09", open:25867.1, high:25923.65, low:25728, close:25839.65},
+  {date:"2025-12-10", open:25864.05, high:25947.65, low:25734.55, close:25758},
+  {date:"2025-12-11", open:25771.4, high:25922.8, low:25693.25, close:25898.55},
+  {date:"2025-12-12", open:25971.2, high:26057.6, low:25938.45, close:26046.95},
+  {date:"2025-12-15", open:25930.05, high:26047.15, low:25904.75, close:26027.3},
+  {date:"2025-12-16", open:25951.5, high:25980.75, low:25834.35, close:25860.1},
+  {date:"2025-12-17", open:25902.4, high:25929.15, low:25770.35, close:25818.55},
+  {date:"2025-12-18", open:25764.7, high:25902.35, low:25726.3, close:25815.55},
+  {date:"2025-12-19", open:25911.5, high:25993.35, low:25880.45, close:25966.4},
+  {date:"2025-12-22", open:26055.85, high:26180.7, low:26047.8, close:26172.4},
+  {date:"2025-12-23", open:26205.2, high:26233.55, low:26119.05, close:26177.15},
+  {date:"2025-12-24", open:26170.65, high:26236.4, low:26123, close:26142.1},
+  {date:"2025-12-26", open:26121.25, high:26144.2, low:26008.6, close:26042.3},
+  {date:"2025-12-29", open:26063.35, high:26106.8, low:25920.3, close:25942.1},
+  {date:"2025-12-30", open:25940.9, high:25976.75, low:25878, close:25938.85},
+  {date:"2025-12-31", open:25971.05, high:26187.95, low:25969, close:26129.6},
+  {date:"2026-01-01", open:26173.3, high:26197.55, low:26113.4, close:26146.55},
+  {date:"2026-01-02", open:26155.1, high:26340, low:26118.4, close:26328.55},
+  {date:"2026-01-05", open:26333.7, high:26373.2, low:26210.05, close:26250.3},
+  {date:"2026-01-06", open:26189.7, high:26273.95, low:26124.75, close:26178.7},
+  {date:"2026-01-07", open:26143.1, high:26187.15, low:26067.9, close:26140.75},
+  {date:"2026-01-08", open:26106.5, high:26133.2, low:25858.45, close:25876.85},
+  {date:"2026-01-09", open:25840.4, high:25940.6, low:25623, close:25683.3},
+  {date:"2026-01-12", open:25669.05, high:25813.15, low:25473.4, close:25790.25},
+  {date:"2026-01-13", open:25897.35, high:25899.8, low:25603.3, close:25732.3},
+  {date:"2026-01-14", open:25648.55, high:25791.75, low:25603.95, close:25665.6},
+  {date:"2026-01-16", open:25696.05, high:25873.5, low:25662.4, close:25694.35}
+];
+
+rawData.forEach(d => d.date = d3.timeParse("%Y-%m-%d")(d.date));
+const spot = rawData.at(-1).close;
+
+/* ===============================
+   FUTURE X SLOTS (5)
+   =============================== */
+const futureBars = 4;
+const lastDate = rawData.at(-1).date;
+const futureDates = [];
+
+for (let i = 1; i <= futureBars; i++) {
+  const d = new Date(lastDate);
+  d.setDate(d.getDate() + i);
+  futureDates.push(d);
+}
+
+const allDates = rawData.map(d => d.date).concat(futureDates);
+
+/* ===============================
+   CHART LAYOUT
+   =============================== */
+const margin = { top: 20, right: 20, bottom: 30, left: 60 };
+const width = 480;
+const height = 420;
+const payoffWidth = 180;
+
+const svg = d3.select("#chart")
+  .attr("width", width + payoffWidth + margin.left + margin.right)
+  .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+  .attr("transform", `translate(${margin.left},${margin.top})`);
+
+const x = d3.scaleBand()
+  .domain(allDates)
+  .range([0, width])
+  .padding(0.3);
+
+const y = d3.scaleLinear()
+  .domain([25000, 26800])
+  .range([height, 0]);
+
+const xAxis = svg.append("g")
+  .attr("transform", `translate(0,${height})`)
+  .call(d3.axisBottom(x).tickFormat(d3.timeFormat("%d %b")));
+
+xAxis.selectAll("text")
+  .attr("text-anchor", "end")
+  .attr("dx", "-0.6em")
+  .attr("dy", "0.15em")
+  .attr("transform", "rotate(-65)")
+  .style("font-size", "8px");
+
+svg.append("g").call(d3.axisLeft(y));
+
+const futureStartX = x(futureDates[0]);
+
+svg.append("rect")
+  .attr("class", "future-zone")
+  .attr("x", futureStartX)
+  .attr("y", 0)
+  .attr("width", width - futureStartX)
+  .attr("height", height);
+
+/* ===============================
+   CANDLES
+   =============================== */
+svg.selectAll(".wick")
+  .data(rawData)
+  .enter().append("line")
+  .attr("x1", d => x(d.date) + x.bandwidth() / 2)
+  .attr("x2", d => x(d.date) + x.bandwidth() / 2)
+  .attr("y1", d => y(d.high))
+  .attr("y2", d => y(d.low))
+  .attr("stroke", d => d.close >= d.open ? "#26a69a" : "#ef5350");
+
+svg.selectAll(".candle")
+  .data(rawData)
+  .enter().append("rect")
+  .attr("x", d => x(d.date))
+  .attr("y", d => y(Math.max(d.open, d.close)))
+  .attr("width", x.bandwidth())
+  .attr("height", d => Math.abs(y(d.open) - y(d.close)))
+  .attr("fill", d => d.close >= d.open ? "#26a69a" : "#ef5350");
+
+/* ===============================
+   INTERACTION LAYER
+   =============================== */
+let box, label, boxLow, boxHigh;
+let drawing = false, startX, startY;
+
+const interaction = svg.append("rect")
+  .attr("width", width)
+  .attr("height", height)
+  .attr("fill", "transparent")
+  .style("pointer-events", "all");
+
+interaction.node().addEventListener("pointerdown", e => {
+  const [mx, my] = d3.pointer(e, svg.node());
+  if (mx < futureStartX) return;
+
+  interaction.node().setPointerCapture(e.pointerId);
+  drawing = true;
+  startX = mx;
+  startY = my;
+
+  if (box) box.remove();
+  if (label) label.remove();
+  if (label?.low) label.low.remove();
+
+  box = svg.append("rect").attr("class", "selection-box");
+  label = svg.append("text").attr("class", "price-label");
+});
+
+interaction.node().addEventListener("pointermove", e => {
+  if (!drawing) return;
+  const [mx, my] = d3.pointer(e, svg.node());
+
+  const x1 = Math.min(startX, mx);
+  const y1 = Math.min(startY, my);
+  const x2 = Math.max(startX, mx);
+  const y2 = Math.max(startY, my);
+
+  box.attr("x", x1).attr("y", y1)
+     .attr("width", x2 - x1)
+     .attr("height", y2 - y1);
+
+  boxHigh = y.invert(y1);
+  boxLow = y.invert(y2);
+
+  // value ABOVE the box (high)
+  label
+    .attr("x", x1 + 4)
+    .attr("y", y1 - 6)
+    .text(boxHigh.toFixed(0));
+
+  // value BELOW the box (low)
+  if (!label.low) {
+    label.low = svg.append("text").attr("class", "price-label");
+  }
+
+  label.low
+    .attr("x", x1 + 4)
+    .attr("y", y2 + 14)
+    .text(boxLow.toFixed(0));
+
+});
+
+interaction.node().addEventListener("pointerup", e => {
+  drawing = false;
+  interaction.node().releasePointerCapture(e.pointerId);
+  renderStrategyButtons();   // 🔥 key hook
+});
+
+/* ===============================
+   STRATEGY SELECTION LOGIC
+   =============================== */
+/* ===============================
+   STRATEGY SELECTION LOGIC (FIXED)
+   =============================== */
+function suggestStrategies() {
+  if (boxLow == null || boxHigh == null) return [];
+
+  const range = Math.abs(boxHigh - boxLow);
+  const inRange = spot >= boxLow && spot <= boxHigh;
+
+  const strategies = [];
+
+  /* --------------------------------
+     CASE 1: SPOT INSIDE RANGE
+     -------------------------------- */
+  if (inRange) {
+    if (range <= 100) {
+      strategies.push("STRADDLE", "IRON_BUTTERFLY");
+    }
+    else if (range <= 250) {
+      strategies.push("IRON_CONDOR");
+    }
+    else {
+      strategies.push("STRANGLE");
+    }
+    return strategies;
+  }
+
+  /* --------------------------------
+     CASE 2: BULLISH (BOX ABOVE SPOT)
+     -------------------------------- */
+  if (boxLow > spot) {
+    strategies.push("BULL_CALL_SPREAD", "BULL_PUT_SPREAD");
+    return strategies;
+  }
+
+  /* --------------------------------
+     CASE 3: BEARISH (BOX BELOW SPOT)
+     -------------------------------- */
+  if (boxHigh < spot) {
+    strategies.push("BEAR_CALL_SPREAD", "BEAR_PUT_SPREAD");
+    return strategies;
+  }
+
+  return strategies;
+}
+
+
+/* ===============================
+   PAYOFF (UNCHANGED)
+   =============================== */
+const payoffGroup = svg.append("g")
+  .attr("transform", `translate(${width},0)`);
+
+const pnlScale = d3.scaleLinear().range([0, payoffWidth]);
+
+svg.append("line")
+  .attr("x1", width)
+  .attr("x2", width)
+  .attr("y1", 0)
+  .attr("y2", height)
+  .attr("stroke", "#444");
+
+const legPayoff = (S, l) => {
+  const intrinsic = l.type === "CALL"
+    ? Math.max(S - l.strike, 0)
+    : Math.max(l.strike - S, 0);
+  const pnl = intrinsic - l.ltp;
+  return l.side === "SELL" ? -pnl : pnl;
+};
+
+const stratPayoff = (S, legs) =>
+  legs.reduce((a, l) => a + legPayoff(S, l), 0);
+
+function drawPayoff(legs) {
+  payoffGroup.selectAll("*").remove();
+
+  const prices = d3.range(y.domain()[0], y.domain()[1], 25);
+  const data = prices.map(p => ({ p, pnl: stratPayoff(p, legs) }));
+
+  const [minPnL, maxPnL] = d3.extent(data, d => d.pnl);
+
+  // ---- ADD PADDING FOR NARROW PAYOFF ----
+  const pad = Math.max(
+    Math.abs(maxPnL - minPnL) * 0.15, // 15% breathing room
+    50                               // minimum padding
+  );
+
+  // ---- FORCE SYMMETRY AROUND ZERO ----
+  const absMax = Math.max(
+    Math.abs(maxPnL + pad),
+    Math.abs(minPnL - pad)
+  );
+
+  pnlScale
+    .domain([absMax, -absMax])
+    .nice();
+
+
+  payoffGroup.append("line")
+    .attr("x1", pnlScale(0))
+    .attr("x2", pnlScale(0))
+    .attr("y1", 0)
+    .attr("y2", height)
+    .attr("stroke", "#666")
+    .attr("stroke-dasharray", "4");
+
+  payoffGroup.append("path")
+    .datum(data)
+    .attr("fill", "none")
+    .attr("stroke", "#42a5f5")
+    .attr("stroke-width", 2)
+    .attr("d", d3.line()
+      .x(d => pnlScale(d.pnl))
+      .y(d => y(d.p))
+    );
+
+  payoffGroup.append("g")
+    .call(
+      d3.axisTop(pnlScale)
+        .ticks(3)
+        .tickFormat(d => Math.round(d))
+    );
+
+}
+
+function renderMetrics(legs) {
+  const container = d3.select("#strategy-metrics").html("");
+  if (!legs || !legs.length) return;
+
+  const prices = d3.range(y.domain()[0], y.domain()[1], 10);
+  const pnls = prices.map(p => stratPayoff(p, legs));
+
+  const maxProfit = d3.max(pnls);
+  const maxLoss = d3.min(pnls);
+
+  const isStraddleOrStrangle =
+    legs.length === 2 &&
+    legs.every(l => l.side === "SELL") &&
+    legs.some(l => l.type === "CALL") &&
+    legs.some(l => l.type === "PUT");
+
+  container.append("div")
+    .attr("class", "strategy-metrics")
+    .html(`
+      <div class="metric-row">
+        <span class="metric-label">Max Profit</span>
+        <span class="metric-profit">
+          ${maxProfit.toFixed(0)}
+        </span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Max Loss</span>
+        <span class="${isStraddleOrStrangle ? "metric-unlimited" : "metric-loss"}">
+          ${isStraddleOrStrangle ? "Unlimited" : maxLoss.toFixed(0)}
+        </span>
+      </div>
+    `);
+}
+
+/* ===============================
+   STRATEGY LEGS
+   =============================== */
+const round50 = x => Math.round(x / 50) * 50;
+
+function getLegs(name) {
+  const atm = round50(spot);
+  const low = round50(boxLow ?? atm - 200);
+  const high = round50(boxHigh ?? atm + 200);
+
+  const C = k => optionChain[k]?.call;
+  const P = k => optionChain[k]?.put;
+
+  switch (name) {
+    case "STRADDLE":
+      return [
+        { type: "CALL", side: "SELL", strike: atm, ltp: C(atm) },
+        { type: "PUT", side: "SELL", strike: atm, ltp: P(atm) }
+      ];
+    case "STRANGLE":
+      return [
+        { type: "CALL", side: "SELL", strike: high, ltp: C(high) },
+        { type: "PUT", side: "SELL", strike: low, ltp: P(low) }
+      ];
+    case "IRON_CONDOR":
+      return [
+        { type: "PUT", side: "SELL", strike: low, ltp: P(low) },
+        { type: "PUT", side: "BUY", strike: low - 100, ltp: P(low - 100) },
+        { type: "CALL", side: "SELL", strike: high, ltp: C(high) },
+        { type: "CALL", side: "BUY", strike: high + 100, ltp: C(high + 100) }
+      ];
+    case "IRON_BUTTERFLY":
+      return [
+        { type: "CALL", side: "SELL", strike: atm, ltp: C(atm) },
+        { type: "PUT", side: "SELL", strike: atm, ltp: P(atm) },
+        { type: "CALL", side: "BUY", strike: atm + 100, ltp: C(atm + 100) },
+        { type: "PUT", side: "BUY", strike: atm - 100, ltp: P(atm - 100) }
+      ];
+    case "BULL_CALL_SPREAD":
+      return [
+        { type: "CALL", side: "BUY", strike: atm, ltp: C(atm) },
+        { type: "CALL", side: "SELL", strike: high, ltp: C(high) }
+      ];
+    case "BULL_PUT_SPREAD":
+      return [
+        { type: "PUT", side: "SELL", strike: low, ltp: P(low) },
+        { type: "PUT", side: "BUY", strike: low - 100, ltp: P(low - 100) }
+      ];
+    case "BEAR_CALL_SPREAD":
+      return [
+        { type: "CALL", side: "SELL", strike: high, ltp: C(high) },
+        { type: "CALL", side: "BUY", strike: high + 100, ltp: C(high + 100) }
+      ];
+    case "BEAR_PUT_SPREAD":
+      return [
+        { type: "PUT", side: "BUY", strike: atm, ltp: P(atm) },
+        { type: "PUT", side: "SELL", strike: low, ltp: P(low) }
+      ];
+  }
+}
+
+/* ===============================
+   RENDER STRATEGY LEGS (NEW)
+   =============================== */
+function renderLegs(strategyName) {
+  const legs = getLegs(strategyName);
+  const container = d3.select("#strategy-legs").html("");
+
+  if (!legs || !legs.length) return;
+
+  legs.forEach(l => {
+    container.append("div")
+      .attr("class", "strategy-legs-card")
+      .html(`
+        <div class="leg-row">
+          <span class="leg-type">${l.type}</span>
+          <span class="${l.side === "BUY" ? "leg-buy" : "leg-sell"}">
+            ${l.side}
+          </span>
+        </div>
+        <div class="leg-row">
+          <span>Strike</span>
+          <span>${l.strike}</span>
+        </div>
+        <div class="leg-row">
+          <span>Premium</span>
+          <span>${l.ltp?.toFixed(2) ?? "-"}</span>
+        </div>
+      `);
+  });
+}
+
+/* ===============================
+   UI RENDER
+   =============================== */
+function renderStrategyButtons() {
+  const list = suggestStrategies();
+  const btnBox = d3.select("#strategy-buttons").html("");
+
+  d3.select("#strategy-legs").html("");   // ✅ NEW: clear legs on redraw
+
+  if (!list.length) {
+    btnBox.append("div")
+      .style("color", "#777")
+      .style("font-size", "12px")
+      .text("Draw a range to see strategies");
+    return;
+  }
+
+  list.forEach(s => {
+    btnBox.append("div")
+      .attr("class", "strategy-btn")
+      .text(s.replace(/_/g, " "))
+      .on("click", function () {
+        d3.selectAll(".strategy-btn").classed("active", false);
+        d3.select(this).classed("active", true);
+
+        const legs = getLegs(s);
+
+        drawPayoff(legs);
+        renderLegs(s);
+        renderMetrics(legs); // ✅ NEW
+      });
+
+  });
+}
+
+
+</script>
+
+</body>
+</html>

@@ -4,7 +4,7 @@ summary: "A practical comparison of Nubra and Zerodha APIs from an algo traderâ€
 tags: ["Algo Trading", "API Comparison", "Nubra", "Zerodha", "Trading Infrastructure"]
 readTime: "7 min"
 publishDate: "2025-12-15"
-author: "Nubra Engineering"
+author: "Akshay Navin: Algo Trader & Content Developer"
 ---
 
 

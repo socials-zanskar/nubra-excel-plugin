@@ -4,7 +4,7 @@ summary: "A practical guide to SEBI’s retail algo framework, covering API-base
 tags: ["SEBI", "Algo Trading", "API Trading", "Regulations", "Retail Algo"]
 readTime: "6 min"
 publishDate: "2025-12-20"
-author: "Nubra Engineering"
+author: "Akshay Navin: Algo Trader & Content Developer"
 ---
 
  

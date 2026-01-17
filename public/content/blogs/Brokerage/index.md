@@ -1,10 +1,10 @@
 ---
 title: "Brokerage Is the Strategy: Why Trading Costs Decide Long-Term Profitability"
 summary: "A cost-first look at how brokerage quietly compounds over time, why traditional per-order pricing hurts active traders, and how volume-based brokerage aligns better with real trading behavior."
-tags: ["Brokerage", "Trading Costs", "Intraday Trading", "Options Trading", "Active Traders"]
+tags: ["Brokerage", "Trading Costs"]
 readTime: "5 min"
 publishDate: "2026-01-10"
-author: "Nubra Engineering"
+author: "Akshay Navin: Algo Trader & Content Developer"
 ---
 
 

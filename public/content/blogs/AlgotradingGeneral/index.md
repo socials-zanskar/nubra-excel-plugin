@@ -1,10 +1,10 @@
 ---
 title: "What Is Algo Trading and How It’s Changing the Way India Trades"
 summary: "Algo trading now powers over 57% of equity cash and 70% of derivatives trades in India. This blog explains how it works, why retail traders are adopting it fast, and compares building your own algorithm in Python vs using ready-made platforms like Tradetron or AlgoTest."
-tags: ["Algo Trading","Python", "Automation", "India", "AI", "Trading Platforms"]
+tags: ["Algo Trading","Python", "Automation"]
 readTime: "6 min"
 publishDate: "2026-01-14"
-author: "Nubra Engineering"
+author: "Suboth Sundar: Algo Trader & Content Developer"
 ---
 <p style="text-align:center;"><img src="./assets/algo_trading_growth.png" alt="" aria-label="Cloudflare outage and trading platforms" style="width:100%;height:100%;max-width:200%;display:block;margin:0 auto;" /></p>
 
