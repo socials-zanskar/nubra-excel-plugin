@@ -4,7 +4,7 @@ summary: "Get up and running with Nubra’s Python SDK in just 5 minutes. Learn 
 tags: ["Python", "SDK", "API Trading"]
 readTime: "5 min"
 publishDate: "2025-12-27"
-author: "Akshay Navin: Algo & Content Developer"
+author: "Akshay Navin: Algo Trader & Content Developer"
 ---
 
 

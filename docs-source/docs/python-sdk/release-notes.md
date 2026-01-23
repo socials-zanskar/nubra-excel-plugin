@@ -2,6 +2,18 @@
 
 This document contains the release history and changes for the Nubra Python SDK.
 
+## Version 0.3.8
+
+### Features & Enhancements
+
+- **Index WebSocket – Open Interest (OI) Support**  
+  The Index WebSocket now exposes **Open Interest (OI)** data for applicable instruments.
+  - Real-time **OI updates for Futures and Options** are now available via the index WebSocket stream
+  - The `volume_oi` field is included in the Index WebSocket payload when applicable
+  - For non-derivative instruments (e.g., spot indices, equities), `volume_oi` will be `None`
+
+---
+
 ## Version 0.3.7
 
 ### Features & Enhancements
@@ -97,6 +109,6 @@ pip install --upgrade --index-url https://test.pypi.org/simple/ --extra-index-ur
 
 | Version | Status      | Python Version Support |
 |---------|-------------|------------------------|
-| 0.3.5   | Current     | 3.7+                   |
+| 0.3.8   | Current     | 3.7+                   |
 | 0.2.5   | Previous    | 3.7+                   |
 

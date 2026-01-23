@@ -1,72 +1,90 @@
 # Index Data
-Subscribes to real-time data for market indices and stocks. While received through `on_market_data`, can be filtered using the index subscription.
+
+Subscribes to real-time market data for indices, equities, and derivative symbols.  
+Index updates are delivered via the WebSocket and can be filtered using the `index` subscription.
+
+> **Note:** Despite the name, the `index` subscription can also emit updates for stock symbols and derivative instruments (e.g., futures, options), depending on the symbol subscribed.
+
+---
 
 ## Usage
 
-=== "Python"
-    ```python
-    from nubra_python_sdk.ticker import websocketdata
-    from nubra_python_sdk.start_sdk import InitNubraSdk, NubraEnv
+### Python
 
-
-    # Initialize the Nubra SDK client
-    nubra = InitNubraSdk(NubraEnv.UAT)
-
-    ##using totp login and .env file 
-    #nubra = InitNubraSdk(NubraEnv.UAT, totp_login= True ,env_creds = True)
-
-    # Define callback functions
-
-    def on_index_data(msg):
-        print(f"[INDEX] {msg}")
-
-    def on_connect(msg):
-        print("[status]", msg)
-
-    def on_close(reason):
-        print(f"Closed: {reason}")
-
-    def on_error(err):
-        print(f"Error: {err}")
-
-    # Initialize WebSocket
-    socket = websocketdata.NubraDataSocket(
-        client=nubra,
-        on_index_data=on_index_data,
-        on_connect=on_connect,
-        on_close=on_close,
-        on_error=on_error
-        )
-
-    socket.connect()
-    #Subscribe to different data types
-    socket.subscribe(["NIFTY", "BANKNIFTY"], data_type="index",exchange ="NSE")
-
-    #Infinite loop on the main thread. Nothing after this will run.
-    #You have to use the pre-defined callbacks to manage subscriptions.
-    socket.keep_running()
-    ```
-
-
-| Attribute | Data Type | Description|
-|----------|----------|----------|
-| symbols | List[str] | List of index symbols (e.g., ['NIFTY', 'BANKNIFTY']) |
-| data_type | str | "index" |
-| exchange | Optional[str]| eg., "NSE" , "BSE" ;if exchange is not passed default is "NSE"|
-
-Response:
 ```python
-# Response object structure
+from nubra_python_sdk.ticker import websocketdata
+from nubra_python_sdk.start_sdk import InitNubraSdk, NubraEnv
+
+# Initialize the Nubra SDK client
+nubra = InitNubraSdk(NubraEnv.UAT)
+
+# Callback functions
+def on_index_data(msg):
+    print(f"[INDEX] {msg}")
+
+def on_connect(msg):
+    print("[status]", msg)
+
+def on_close(reason):
+    print(f"Closed: {reason}")
+
+def on_error(err):
+    print(f"Error: {err}")
+
+# Initialize WebSocket
+socket = websocketdata.NubraDataSocket(
+    client=nubra,
+    on_index_data=on_index_data,
+    on_connect=on_connect,
+    on_close=on_close,
+    on_error=on_error
+)
+
+socket.connect()
+
+# Subscribe to index / symbol data
+socket.subscribe(
+    symbols=["NIFTY", "RELIANCE26FEBFUT", "NIFTY2612026000CE"],
+    data_type="index",
+    exchange="NSE"
+)
+
+# Keep the socket running
+socket.keep_running()
+```
+
+---
+
+## Subscription Parameters
+
+| Attribute | Data Type | Description |
+|----------|----------|------------|
+| symbols | List[str] | List of index or symbol identifiers (e.g., ["NIFTY", "RELIANCE26FEBFUT", "NIFTY2612026000CE"]) |
+| data_type | str | Must be "index" |
+| exchange | Optional[str] | "NSE" or "BSE" (default: "NSE") |
+
+---
+
+## Response Object
+
+Index updates are delivered as an `IndexDataWrapper` object.
+
+```python
 class IndexDataWrapper:
-    indexname: str              # Symbol of the index (e.g., "NIFTY")
-    exchange: str               # eg., NSE, BSE
-    timestamp: int              # Timestamp in Epoch
-    index_value: int            # Current index value
-    volume: int                 # Trading volume
-    changepercent: float        # Percentage change
+    indexname: str              # Symbol name (index, equity, or derivative)
+    exchange: str               # Exchange (e.g., NSE, BSE)
+    timestamp: int              # Epoch timestamp (nanoseconds)
+    index_value: int            # Current value / last traded price
+    high_index_value: int       # Session high
+    low_index_value: int        # Session low
+    volume: int                 # Traded volume
+    changepercent: float        # Percentage change from previous close
     tick_volume: int            # Number of ticks
     prev_close: int             # Previous closing value
+    volume_oi: Optional[int]    # Open interest (present for derivatives, else None)
 ```
+
+---
 
 ## Error Handling
 

@@ -4,7 +4,7 @@ summary: "Nubra’s UAT environment lets you test your trading strategies in rea
 tags: ["UAT", "Algo Trading", "Strategy Testing", "Trading Infrastructure"]
 readTime: "5 min"
 publishDate: "2026-01-13"
-author: "Suboth Sundar: Algo Trader & Content Developer"
+author: "Suboth Sundar: Algo Trader & Analyst"
 ---
 
 ## What Is UAT?

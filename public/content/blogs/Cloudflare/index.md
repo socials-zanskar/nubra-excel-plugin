@@ -4,7 +4,7 @@ summary: "A recent Cloudflare disruption left millions of traders unable to acce
 tags: ["Trading Infrastructure", "Risk Management"]
 readTime: "5 min"
 publishDate: "2025-12-30"
-author: "Suboth Sundar: Algo Trader & Content Developer"
+author: "Suboth Sundar: Algo Trader & Analyst"
 ---
 
 <p style="text-align:center;"><img src="./assets/cloudflare-outage-hero.png" alt="" aria-label="Cloudflare outage and trading platforms" style="width:70%;height:auto;max-width:100%;display:block;margin:0 auto;" /></p>
