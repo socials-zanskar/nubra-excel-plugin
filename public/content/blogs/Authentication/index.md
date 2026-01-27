@@ -1,7 +1,7 @@
 ---
 title: "Authentication in Algo Trading: Why True Automation Starts Here"
 summary: "Authentication is the foundation of every algorithmic trading system. This blog explains why secure, predictable authentication matters, how traditional broker flows break automation, and how modern systems are designed for server-first trading."
-tags: ["Authentication", "Algo Trading", "SEBI Compliance", "Automation", "Trading Infrastructure"]
+tags: ["Authentication & Security", "Risk, Margin & Compliance", "API Trading"]
 readTime: "7 min"
 publishDate: "2026-01-22"
 author: "Akshay Navin: Algo Trader & Content Developer"

@@ -1,7 +1,7 @@
 ---
 title: "SEBI Regulations on API-Based Trading & Retail Algo Approvals"
 summary: "A practical guide to SEBI’s retail algo framework, covering API-based trading rules, algo approvals, OPS limits, White Box vs Black Box classification, and broker responsibilities."
-tags: ["SEBI", "Algo Trading", "API Trading", "Regulations", "Retail Algo"]
+tags: ["Risk, Margin & Compliance", "Algo Trading", "API Trading"]
 readTime: "6 min"
 publishDate: "2025-12-20"
 author: "Akshay Navin: Algo Trader & Content Developer"

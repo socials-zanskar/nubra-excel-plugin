@@ -1,7 +1,7 @@
 ---
 title: "Why One “Place Order” Is Not Enough"
 summary: "Placing an order is only the starting point in algorithmic trading. This article explains why real-world execution requires order lifecycle management, validations, risk checks, retries, modifications, cancellations, and post-trade tracking."
-tags: ["Algo Trading", "Order Management", "Trading APIs", "Execution"]
+tags: ["Execution & Order Management", "API Trading"]
 readTime: "6 min"
 publishDate: "2026-01-04"
 author: "Akshay Navin: Algo Trader & Content Developer"

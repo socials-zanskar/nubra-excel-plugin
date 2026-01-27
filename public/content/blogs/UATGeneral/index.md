@@ -1,7 +1,7 @@
 ---
 title: "What Is UAT and How to Use It at Nubra"
 summary: "Nubra’s UAT environment lets you test your trading strategies in real-time without using real money. This post explains how UAT works, how it's different from the live environment, and how you can test high-frequency strategies with up to 100 orders per second (OPS)."
-tags: ["UAT", "Algo Trading", "Strategy Testing", "Trading Infrastructure"]
+tags: ["Risk, Margin & Compliance", "Platform Reliability"]
 readTime: "5 min"
 publishDate: "2026-01-13"
 author: "Suboth Sundar: Algo Trader & Analyst"

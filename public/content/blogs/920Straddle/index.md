@@ -1,7 +1,7 @@
 ---
 title: "The 9:20 Straddle: A Popular Intraday Options Strategy Explained"
 summary: "The 9:20 straddle is one of the most traded intraday options strategies in India. This blog explains how it works, why traders use it, when it performs well or fails—and how to test or automate it with discipline."
-tags: ["Options Trading", "Straddle", "Intraday Strategy", "Backtesting", "UAT"]
+tags: ["Options & Derivatives", "Trading Psychology & Education"]
 readTime: "6 min"
 publishDate: "2026-01-21"
 author: "Suboth Sundar: Algo Trader & Analyst"

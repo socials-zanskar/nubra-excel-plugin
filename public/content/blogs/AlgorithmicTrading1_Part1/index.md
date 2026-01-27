@@ -1,7 +1,7 @@
 ---
 title: "Part 1: Building a Live Market Data Pipeline for Algorithmic Trading (Python + SQL)"
 summary: "Learn how to build a production-grade real-time market data pipeline using Python, WebSockets, and SQLite. This guide covers live tick streaming, persistent storage, and OHLC candle generation as the foundation for algorithmic trading."
-tags: ["Algorithmic Trading", "Market Data", "Python", "WebSockets", "SQL"]
+tags: ["Algo Trading", "Market Data", "API Trading"]
 readTime: "12 min"
 publishDate: "2025-12-27"
 author: "Akshay Navin: Alg Trader & Content Developer"

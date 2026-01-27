@@ -1,7 +1,7 @@
 ---
 title: "5-Minute Python Quickstart with Nubra SDK"
 summary: "Get up and running with Nubra’s Python SDK in just 5 minutes. Learn how to authenticate, place your first order, and start trading using Nubra APIs."
-tags: ["Python", "SDK", "API Trading"]
+tags:  ["Algo Trading", "API Trading", "Market Data"]
 readTime: "5 min"
 publishDate: "2025-12-27"
 author: "Akshay Navin: Algo Trader & Content Developer"

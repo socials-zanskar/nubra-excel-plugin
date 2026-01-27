@@ -1,7 +1,7 @@
 ---
 title: "Options Strategies Explained with Interactive Payoff Visuals"
 summary: "Explore popular options strategies through an interactive payoff chart. Visually project price ranges, understand strategy legs, and see how different market views translate into profits and losses."
-tags: ["Options", "Strategy Builder", "Visual Tools"]
+tags: ["Options & Derivatives", "Trading Psychology & Education"]
 readTime: "6 min"
 publishDate: "2026-01-17"
 author: "Akshay Navin: Algo Trader & Content Developer"

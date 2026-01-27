@@ -1,7 +1,7 @@
 ---
 title: "Latency Is the Strategy: Why Speed Wins in Algo Trading APIs"
 summary: "An infrastructure-first look at why latency—not features—defines real-world performance in algorithmic trading APIs, and how execution speed shapes strategy outcomes."
-tags: ["Algo Trading", "Latency", "Trading Infrastructure", "Execution"]
+tags: ["Trading Infrastructure", "Execution & Order Management"]
 readTime: "6 min"
 publishDate: "2026-01-10"
 author: "Akshay Navin: Algo Trader & Content Developer"

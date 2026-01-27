@@ -1,7 +1,7 @@
 ---
 title: "When Cloudflare Went Down, Markets Didn’t — But Many Trading Platforms Did"
 summary: "A recent Cloudflare disruption left millions of traders unable to access their platforms even while exchanges remained live. This article explains how infrastructure failures propagate through modern trading systems — and what this means for trust, risk, and platform reliability."
-tags: ["Trading Infrastructure", "Risk Management"]
+tags: ["Trading Infrastructure", "Platform Reliability"]
 readTime: "5 min"
 publishDate: "2025-12-30"
 author: "Suboth Sundar: Algo Trader & Analyst"

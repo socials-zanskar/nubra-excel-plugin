@@ -84,18 +84,22 @@ Click any question to expand the detailed answer.
 
     ---
 
-    ## AlgoTest Integration – Coming Soon
+    ## AlgoTest Integration – LIVE
 
-    Nubra ↔ AlgoTest integration is under development.
+    You can now use **Nubra as a broker on Algotest**.
 
-    Once ready, you will be able to:
+    ### How to Connect Nubra on Algotest
 
-    - Link Nubra trading account in AlgoTest  
-    - Execute live or paper strategies  
-    - Connect option strategy engines  
-    - Use AlgoTest analytics with Nubra execution  
+    Inside **Algotest → Brokers → Add Broker → Nubra**:
 
-    A public announcement will follow after launch.
+    1. Select **Nubra**
+    2. Enter **registered phone number**
+    3. Enter **MPIN**
+    4. Click **Generate OTP**
+    5. Enter OTP received on SMS
+    6. Click **Save**
+
+    Algotest will now be linked to your Nubra trading account.
 
     [Need more assistance?](https://nubra.io/support){.md-button .md-button--primary}
 

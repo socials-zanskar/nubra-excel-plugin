@@ -1,7 +1,7 @@
 ---
 title: "Opening Range Breakout (ORB): A Simple, Rule-Based Intraday Trading Strategy"
 summary: "An educational walkthrough of the Opening Range Breakout (ORB) strategy — how it identifies early market momentum, defines risk clearly, and executes disciplined intraday trades."
-tags: ["ORB Strategy", "Intraday Trading", "Algo Trading", "Trading Education"]
+tags: ["Algo Trading", "Trading Psychology & Education"]
 readTime: "6 min"
 publishDate: "2026-01-21"
 author: "Akshay Navin: Algo Trader & Content Developer"

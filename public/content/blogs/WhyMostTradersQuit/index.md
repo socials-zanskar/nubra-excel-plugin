@@ -1,7 +1,7 @@
 ---
 title: "Why Most Traders Quit — and What the Survivors Do Differently"
 summary: "Trading attracts thousands, but only a few stick around long enough to succeed. This blog explores the common reasons most traders quit and the systems that help survivors stay consistent—backtesting, automation, UAT, and structure."
-tags: ["Trader Psychology", "Strategy Testing", "Risk Management", "Trading Routine", "UAT"]
+tags: ["Trading Psychology & Education", "Risk, Margin & Compliance"]
 readTime: "6 min"
 publishDate: "2026-01-07"
 author: "Suboth Sundar: Algo Trader & Analyst"

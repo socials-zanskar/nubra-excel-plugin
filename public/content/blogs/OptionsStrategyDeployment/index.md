@@ -1,7 +1,7 @@
 ---
 title: "Options Strategy Deployment: Short Premium Structures Explained"
 summary: "An educational overview of short premium options strategies — Short Strangle, Iron Condor, and Iron Butterfly — explaining when and why each structure is used."
-tags: ["Options Strategy", "Options Selling", "Algo Trading", "Trading Education"]
+tags:  ["Options & Derivatives", "Trading Psychology & Education", "Algo Trading"]
 readTime: "7 min"
 publishDate: "2026-01-21"
 author: "Akshay Navin: Algo Trader & Content Developer"

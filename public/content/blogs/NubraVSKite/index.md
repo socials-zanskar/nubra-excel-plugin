@@ -1,7 +1,7 @@
 ---
 title: "The Algo Trader’s Dilemma: Nubra API vs Zerodha API"
 summary: "A practical comparison of Nubra and Zerodha APIs from an algo trader’s perspective—covering execution models, API capabilities, compliance, scalability, and real-world trading workflows."
-tags: ["Algo Trading", "API Comparison", "Nubra", "Zerodha", "Trading Infrastructure"]
+tags: ["API Trading", "Algo Trading", "Trading Infrastructure"]
 readTime: "7 min"
 publishDate: "2025-12-15"
 author: "Akshay Navin: Algo Trader & Content Developer"

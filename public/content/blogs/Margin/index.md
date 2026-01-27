@@ -1,7 +1,7 @@
 ---
 title: "Why Margin Is Not Just a Number"
 summary: "Margin in trading is a dynamic risk construct, not a static balance. This article explains how margins change with positions, hedges, volatility, and order intent—and why misunderstanding margin is one of the most common causes of order rejections and forced exits."
-tags: ["Margin", "Risk Management", "Algo Trading", "Derivatives", "Trading Infrastructure"]
+tags: ["Risk, Margin & Compliance", "Execution & Order Management"]
 readTime: "6 min"
 publishDate: "2025-12-29"
 author: "Akshay Navin: Algo Trader & Content Developer"
