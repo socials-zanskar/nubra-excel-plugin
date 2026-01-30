@@ -206,3 +206,4 @@ If Nubra login fails:
 Once Nubra shows **LOGGED IN** under *My Brokers*, the integration is complete.
 
 Nubra is now ready to act as the execution broker for AlgoTest and other supported no-code or low-code algo trading platforms.
+

@@ -300,3 +300,5 @@ That’s why serious algo traders eventually:
 
 ---
 
+
+

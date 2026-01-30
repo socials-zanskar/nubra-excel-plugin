@@ -175,3 +175,5 @@ It's not just about timing the trade—it's about **owning the process**.
   </video>
 </p>
 
+
+

@@ -114,3 +114,5 @@ Whether you code your own bot or use a platform:
 - Focus on risk, not just returns  
 
 The tools are ready — it’s about choosing your path and building with care.
+
+

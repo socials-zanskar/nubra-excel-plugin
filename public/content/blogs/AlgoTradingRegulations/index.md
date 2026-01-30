@@ -273,3 +273,5 @@ All activities including:
 are performed by Nubra **as the broker**, in accordance with SEBI and exchange regulations.
 
 Nubra ensures that **what gets registered runs compliantly in production**.
+
+

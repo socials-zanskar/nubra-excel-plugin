@@ -173,3 +173,5 @@ While most brokers still operate on **outdated per-order pricing**, Nubra is bui
 **Trade more. Adjust freely. Pay fairly.**
 
 That’s the Nubra philosophy.
+
+

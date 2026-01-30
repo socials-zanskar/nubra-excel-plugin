@@ -136,3 +136,5 @@ The Cloudflare event showed how quickly millions of traders can lose access — 
 When the next high-volatility day arrives, traders will remember which platforms stayed accessible — and which ones disappeared behind a loading screen.
 
 <p style="text-align:center;"><img src="./assets/stable-trading-terminal.png" alt="" aria-label="Stable trading system" style="width:50%;height:auto;max-width:100%;display:block;margin:0 auto;" /></p>
+
+

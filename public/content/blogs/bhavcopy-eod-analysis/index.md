@@ -16,7 +16,7 @@ This piece is about using bhavcopy data the way brokers and serious traders shou
 
 ## What a Bhavcopy Is (and Why Exchanges Publish It)
 
-A **bhavcopy** is the exchange�s official end-of-day summary of trading activity for a given segment (cash market, FO, etc.).
+A **bhavcopy** is the exchanges official end-of-day summary of trading activity for a given segment (cash market, FO, etc.).
 
 Exchanges publish it because markets need:
 
@@ -42,12 +42,12 @@ Two broker-facing reminders matter here:
 
 ## Four EOD Use Cases That Actually Hold Up
 
-Bhavcopy is frequently pitched as a �retail scanner.� That undersells it. The highest-value use cases are structural.
+Bhavcopy is frequently pitched as a retail scanner. That undersells it. The highest-value use cases are structural.
 
 ### 1) EOD Trend Confirmation Without Intraday Noise
 
 Intraday charts lie by construction: they are snapshots of a moving microstructure.  
-Bhavcopy closes are what survive the day�s noise.
+Bhavcopy closes are what survive the days noise.
 
 A practical EOD trend pass usually asks:
 
@@ -57,7 +57,7 @@ A practical EOD trend pass usually asks:
 
 ### 2) Delivery % as a Crude but Useful Participation Signal
 
-Delivery percentage is not �smart money detection.� It is a coarse participation signal.
+Delivery percentage is not smart money detection. It is a coarse participation signal.
 
 It becomes useful when you stop treating it as a trigger and start treating it as context:
 
@@ -74,7 +74,7 @@ Bhavcopy does not label institutions. It lets you ask sharper questions:
 
 If you are a broker, the product win is to expose these as **lenses**, not claims.
 
-### 4) Backtesting Inputs That Don�t Quietly Shift Under You
+### 4) Backtesting Inputs That Dont Quietly Shift Under You
 
 If your backtests are trained on vendor-adjusted OHLC but validated on exchange bhavcopy, you�re already dealing with dataset mismatch risk.
 
@@ -86,7 +86,7 @@ Bhavcopy is especially good for:
 
 ## How Brokers Should Expose Bhavcopy via APIs
 
-Most brokers treat bhavcopy as a file download problem. That�s too primitive for modern workflows.
+Most brokers treat bhavcopy as a file download problem. Thats too primitive for modern workflows.
 
 A broker-grade bhavcopy surface typically offers:
 
@@ -110,3 +110,5 @@ Bhavcopy is powerful partly because it is slow and authoritative. That comes wit
 - It is segment-specific. Cross-segment alignment still needs care.
 
 A final broker note: bhavcopy should be the **truth anchor** for EOD, not the only dataset. The win is in using it to validate and stabilize everything else.
+
+

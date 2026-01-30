@@ -141,3 +141,5 @@ It’s about being ready for it — over and over again.
 
 Build your structure.  
 Then stick around long enough to let it work.
+
+

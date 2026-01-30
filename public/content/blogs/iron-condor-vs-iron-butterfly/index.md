@@ -90,3 +90,5 @@ If you don't have a pinning view, you don�t have a butterfly view.
 The risk is not just spot moves. The risk is **spot moves while IV and skew shift against you**.
 
 That's why brokers and serious traders track both premium and Greeks rather than just final payoff diagrams.
+
+

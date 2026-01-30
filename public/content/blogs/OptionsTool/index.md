@@ -124,3 +124,5 @@ Options make the most sense when you stop thinking in terms of *tips* and start 
 This tool is built to help you do exactly that — visually, interactively, and safely.
 
 Draw boxes. Click strategies. Learn how options really work.
+
+

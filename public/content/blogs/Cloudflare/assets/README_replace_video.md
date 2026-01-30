@@ -9,3 +9,4 @@ Steps:
 Notes:
 - For web performance, prefer H.264 baseline or high-profile MP4 with a reasonable bitrate.
 - If you host large videos externally (S3/Cloudflare/R2), you can update the blog markdown to point at the external URL instead of the local file.
+

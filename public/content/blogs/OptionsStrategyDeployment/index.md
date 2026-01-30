@@ -356,3 +356,5 @@ Understanding:
 is far more important than chasing premium.
 
 Used correctly, these strategies help traders **think probabilistically**, not directionally.
+
+

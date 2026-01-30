@@ -69,3 +69,5 @@ Three bad assumptions show up repeatedly:
 - I can ignore leg size tuning. Leg size is the strategy.
 
 A broker-grade iceberg API should force leg size clarity rather than guess it.
+
+

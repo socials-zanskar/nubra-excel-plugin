@@ -339,3 +339,5 @@ By focusing on:
 ORB offers a solid framework for understanding **intraday momentum-based trading**.
 
 Whether used for learning, backtesting, or conceptual clarity, ORB remains one of the most intuitive ways to study how markets behave at the open.
+
+

@@ -30,7 +30,7 @@ const Blogs = () => {
 
   return (
     <div 
-      className="min-h-screen bg-background"
+      className="min-h-screen bg-background usecase-font"
       style={{ 
         backgroundImage: "url('/images/bg-2.png')",
         backgroundSize: 'cover',

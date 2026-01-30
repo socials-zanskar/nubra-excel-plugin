@@ -114,3 +114,5 @@ That changes how you build:
 - You treat partial fills as a first-class risk state
 
 Trading APIs are not just developer products. They are risk products with a developer interface.
+
+

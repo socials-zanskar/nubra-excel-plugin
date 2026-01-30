@@ -87,3 +87,5 @@ Short variants are just the negative of these payoffs plus execution and risk co
 - **Timing errors**: movement happened, but not in your holding window
 
 Serious traders do not ask �is it profitable on a chart.� They ask �what breaks first when I am wrong.�
+
+

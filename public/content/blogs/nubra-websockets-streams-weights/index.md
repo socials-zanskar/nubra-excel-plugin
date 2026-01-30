@@ -135,3 +135,5 @@ threading.Thread(target=run_websocket, daemon=True).start()
 - Budget subscriptions using the weight table
 - Use callbacks for lifecycle visibility and recovery
 - Keep interval values inside the supported list
+
+

@@ -100,3 +100,5 @@ That means you should plan for:
 - Backpressure strategies (queues, batch writes, drop policies)
 
 Realtime data is not �faster REST.� It�s a state machine you must own.
+
+

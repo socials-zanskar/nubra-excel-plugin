@@ -24,9 +24,8 @@ RUN mkdir -p /usr/share/nginx/html/products/api
 # Copy the built files from the builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html/products/api
 
-# Copy a custom NGINX configuration file, if needed
-# (Optional) Uncomment the line below if you have a custom nginx.conf
-# COPY nginx.conf /etc/nginx/nginx.conf
+# Copy custom NGINX configuration file
+COPY nginx.conf /etc/nginx/nginx.conf
 
 # Expose port 80
 EXPOSE 80

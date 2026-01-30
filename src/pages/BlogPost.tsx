@@ -79,7 +79,7 @@ const BlogPostPage = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background usecase-font">
         <NavBar />
         <div className="container mx-auto px-4 pt-32">
           <div className="max-w-3xl mx-auto">
@@ -103,7 +103,7 @@ const BlogPostPage = () => {
 
   if (notFound) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background usecase-font">
         <NavBar />
         <div className="container mx-auto px-4 pt-32 text-center">
           <h1 className="text-4xl font-bold text-foreground mb-4">
@@ -125,7 +125,7 @@ const BlogPostPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background usecase-font">
       <NavBar />
 
       {/* Article Header */}
