@@ -25,9 +25,9 @@ Each individual subscription to a stream consumes the corresponding number of we
 
 | Limit Type | Value |
 |-----------|-------|
-| **Total WebSocket Weight (Session Limit)** | **20,000 points** |
+| **Total WebSocket Weight (Session Limit)** | **50,000 points** |
 
-- The **20,000-point limit** applies to the combined weight of all active WebSocket subscriptions.
+- The **50,000-point limit** applies to the combined weight of all active WebSocket subscriptions.
 
 ---
 
@@ -37,10 +37,10 @@ Each individual subscription to a stream consumes the corresponding number of we
 
 ```text
 300 Option Chain subscriptions → 300 × 20  = 6,000 points
-400 Order Book subscriptions   → 400 × 5   = 2,000 points
+400 Order Book subscriptions   → 3,000 × 5   = 15,000 points
 1,000 Index subscriptions      → 1,000 × 1 = 1,000 points
 ----------------------------------------------
-Total Weight Used              → 9,000 / 20,000
+Total Weight Used              → 22,000 / 50,000
 ```
 
 ---
@@ -55,16 +55,16 @@ Within the allowed session weight limit.
 
 ### Example 3: Exceeding Limits
 
-    1,100 Option Chain subscriptions → 1,100 × 20 = 22,000 points
+    1,100 Option Chain subscriptions → 2,600 × 20 = 52,000 points
 
-Not allowed — exceeds the 20,000-point session limit.
+Not allowed — exceeds the 50,000-point session limit.
 
 ---
 
 ## Session Enforcement
 
 - Weight limits are enforced per WebSocket session.
-- Each session supports subscriptions up to a total of 20,000 weight points.
+- Each session supports subscriptions up to a total of 50,000 weight points.
 - If a client attempts to subscribe beyond this limit, the request is rejected with an error.
 
 ---

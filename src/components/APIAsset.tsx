@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { InfoCard, APIInfo } from "./InfoCard";
 
 interface APIAssetProps {
@@ -11,6 +11,8 @@ interface APIAssetProps {
   onDeactivate: () => void;
   hasActiveAsset: boolean;
   isLogo?: boolean;
+  enableScrollActivation?: boolean;
+  onScrollActivate?: (id: string) => void;
   className?: string;
 }
 
@@ -24,9 +26,13 @@ export const APIAsset = ({
   onDeactivate,
   hasActiveAsset,
   isLogo,
+  enableScrollActivation = false,
+  onScrollActivate,
   className = "",
 }: APIAssetProps) => {
   const [isTouchDevice] = useState(() => 'ontouchstart' in window);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const hasAutoActivatedRef = useRef(false);
 
   const handleInteraction = useCallback(() => {
     if (isActive) {
@@ -47,6 +53,40 @@ export const APIAsset = ({
       onDeactivate();
     }
   }, [isTouchDevice, onDeactivate]);
+
+  useEffect(() => {
+    if (!enableScrollActivation || hasAutoActivatedRef.current) {
+      return;
+    }
+
+    const element = containerRef.current;
+    if (!element || typeof IntersectionObserver === "undefined") {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting || entry.intersectionRatio < 0.35) {
+            return;
+          }
+          if (hasAutoActivatedRef.current) {
+            return;
+          }
+          hasAutoActivatedRef.current = true;
+          if (onScrollActivate) {
+            onScrollActivate(info.id);
+          } else {
+            onActivate();
+          }
+        });
+      },
+      { threshold: [0.35] }
+    );
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [enableScrollActivation, info.id, onActivate, onScrollActivate]);
 
   // Asset-specific directional placement
   const getInfoPosition = (): "left" | "right" | "center" | "bottom" | "top" | "bottom-left" => {
@@ -92,6 +132,7 @@ export const APIAsset = ({
 
   return (
     <div
+      ref={containerRef}
       className={`relative transition-all duration-200 ease-out cursor-pointer ${className}`}
       style={{
         ...getTransformStyles(),

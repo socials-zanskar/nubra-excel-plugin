@@ -68,6 +68,7 @@ const apiData: Record<string, APIInfo> = {
 export const HeroSection = () => {
   const [activeAsset, setActiveAsset] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [hasScrolled, setHasScrolled] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -76,6 +77,15 @@ export const HeroSection = () => {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
+  useEffect(() => {
+    if (hasScrolled) {
+      return;
+    }
+    const handleScroll = () => setHasScrolled(true);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [hasScrolled]);
+
   const handleActivate = useCallback((id: string) => {
     setActiveAsset(id);
   }, []);
@@ -83,6 +93,16 @@ export const HeroSection = () => {
   const handleDeactivate = useCallback(() => {
     setActiveAsset(null);
   }, []);
+
+  const handleScrollActivate = useCallback(
+    (id: string) => {
+      if (activeAsset === id) {
+        return;
+      }
+      setActiveAsset(id);
+    },
+    [activeAsset]
+  );
 
   const handleOutsideClick = useCallback((e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('[role="button"]') === null) {
@@ -129,6 +149,8 @@ export const HeroSection = () => {
                 onActivate={() => handleActivate("pythonRest")}
                 onDeactivate={handleDeactivate}
                 hasActiveAsset={activeAsset !== null}
+                enableScrollActivation={hasScrolled}
+                onScrollActivate={handleScrollActivate}
                 className="w-full max-w-[180px]"
               />
             </div>
@@ -149,6 +171,8 @@ export const HeroSection = () => {
                 onActivate={() => handleActivate("trading")}
                 onDeactivate={handleDeactivate}
                 hasActiveAsset={activeAsset !== null}
+                enableScrollActivation={hasScrolled}
+                onScrollActivate={handleScrollActivate}
                 className="w-full max-w-[200px]"
               />
             </div>
@@ -169,6 +193,8 @@ export const HeroSection = () => {
                 onActivate={() => handleActivate("marketData")}
                 onDeactivate={handleDeactivate}
                 hasActiveAsset={activeAsset !== null}
+                enableScrollActivation={hasScrolled}
+                onScrollActivate={handleScrollActivate}
                 className="w-full max-w-[200px]"
               />
             </div>
@@ -189,6 +215,8 @@ export const HeroSection = () => {
                 onActivate={() => handleActivate("portfolio")}
                 onDeactivate={handleDeactivate}
                 hasActiveAsset={activeAsset !== null}
+                enableScrollActivation={hasScrolled}
+                onScrollActivate={handleScrollActivate}
                 className="w-full max-w-[220px]"
               />
             </div>
@@ -205,6 +233,8 @@ export const HeroSection = () => {
                 onDeactivate={handleDeactivate}
                 hasActiveAsset={activeAsset !== null}
                 isLogo={true}
+                enableScrollActivation={hasScrolled}
+                onScrollActivate={handleScrollActivate}
                 className="w-[80px]"
               />
             </div>
@@ -253,6 +283,8 @@ export const HeroSection = () => {
             onActivate={() => handleActivate("portfolio")}
             onDeactivate={handleDeactivate}
             hasActiveAsset={activeAsset !== null}
+            enableScrollActivation={hasScrolled}
+            onScrollActivate={handleScrollActivate}
             className="w-[195px] md:w-[235px] lg:w-[275px] opacity-60"
           />
         </div>
@@ -277,6 +309,8 @@ export const HeroSection = () => {
               onActivate={() => handleActivate("trading")}
               onDeactivate={handleDeactivate}
               hasActiveAsset={activeAsset !== null}
+              enableScrollActivation={hasScrolled}
+              onScrollActivate={handleScrollActivate}
               className="w-[240px] md:w-[300px] lg:w-[360px]"
             />
           </div>
@@ -299,6 +333,8 @@ export const HeroSection = () => {
               onActivate={() => handleActivate("pythonRest")}
               onDeactivate={handleDeactivate}
               hasActiveAsset={activeAsset !== null}
+              enableScrollActivation={hasScrolled}
+              onScrollActivate={handleScrollActivate}
               className="w-[180px] md:w-[225px] lg:w-[255px]"
             />
           </div>
@@ -321,6 +357,8 @@ export const HeroSection = () => {
               onActivate={() => handleActivate("marketData")}
               onDeactivate={handleDeactivate}
               hasActiveAsset={activeAsset !== null}
+              enableScrollActivation={hasScrolled}
+              onScrollActivate={handleScrollActivate}
               className="w-[240px] md:w-[300px] lg:w-[360px]"
             />
           </div>
@@ -338,6 +376,8 @@ export const HeroSection = () => {
             onDeactivate={handleDeactivate}
             hasActiveAsset={activeAsset !== null}
             isLogo={true}
+            enableScrollActivation={hasScrolled}
+            onScrollActivate={handleScrollActivate}
             className="w-[231px] md:w-[273px] lg:w-[315px]"
           />
         </div>

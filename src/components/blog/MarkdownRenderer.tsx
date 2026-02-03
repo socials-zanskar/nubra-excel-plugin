@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -19,8 +20,70 @@ function generateAnchorId(text: string): string {
 }
 
 export const MarkdownRenderer = ({ content }: MarkdownRendererProps) => {
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    const activateGroup = (group: Element, target: string) => {
+      if (!target) return;
+      const source = group.querySelector<HTMLTextAreaElement>(
+        `[data-broker-code="${target}"]`
+      );
+      const output = group.querySelector<HTMLElement>("[data-broker-output]");
+      if (!source || !output) return;
+
+      const buttons = group.querySelectorAll<HTMLElement>("[data-broker-target]");
+      buttons.forEach((btn) => {
+        btn.classList.toggle("is-active", btn.dataset.brokerTarget === target);
+      });
+
+      output.textContent = (source.value || source.textContent || "").trim();
+    };
+
+    const handleClick = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      const button = target?.closest<HTMLElement>("[data-broker-target]");
+      if (!button || !root.contains(button)) return;
+      const group = button.closest(".broker-toggle");
+      if (!group) return;
+      activateGroup(group, button.dataset.brokerTarget || "");
+    };
+
+    const handleKeyDown = (event: Event) => {
+      const keyboardEvent = event as KeyboardEvent;
+      if (keyboardEvent.key !== "Enter" && keyboardEvent.key !== " ") return;
+      const target = keyboardEvent.target as HTMLElement | null;
+      const button = target?.closest<HTMLElement>("[data-broker-target]");
+      if (!button || !root.contains(button)) return;
+      const group = button.closest(".broker-toggle");
+      if (!group) return;
+      keyboardEvent.preventDefault();
+      activateGroup(group, button.dataset.brokerTarget || "");
+    };
+
+    const groups = root.querySelectorAll(".broker-toggle");
+    groups.forEach((group) => {
+      const defaultButton =
+        group.querySelector<HTMLElement>(".logo-button.is-active") ||
+        group.querySelector<HTMLElement>("[data-broker-target]");
+      if (defaultButton) {
+        activateGroup(group, defaultButton.dataset.brokerTarget || "");
+      }
+    });
+
+    root.addEventListener("click", handleClick);
+    root.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      root.removeEventListener("click", handleClick);
+      root.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [content]);
+
   return (
-    <div className="prose prose-invert prose-lg max-w-none">
+    <div className="prose prose-invert prose-lg max-w-none" ref={rootRef}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw]}
@@ -172,7 +235,7 @@ export const MarkdownRenderer = ({ content }: MarkdownRendererProps) => {
                 customStyle={{
                   margin: 0,
                   borderRadius: '0.75rem',
-                  fontSize: '0.875rem',
+                  fontSize: '0.625rem',
                   background: 'hsl(var(--card))',
                   border: '1px solid hsl(var(--border) / 0.4)',
                 }}
@@ -238,7 +301,7 @@ export const MarkdownRenderer = ({ content }: MarkdownRendererProps) => {
               </div>
             );
           },
-          
+
           // Figure elements
           figure: ({ children, className }) => (
             <figure className={`my-6 ${className || ''}`}>

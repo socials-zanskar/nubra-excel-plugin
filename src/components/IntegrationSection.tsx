@@ -81,26 +81,18 @@ export const IntegrationSection = () => {
     setIsSubmitting(true);
 
     // ✅ BUILD PAYLOAD (this is what backend wants)
-    const mailbodyText = `
-    New Integration Request
-
-    Name: ${formData.name}
-    Email: ${formData.email}
-    Phone: ${formData.countryCode} ${formData.phone}
-
-    User Type:
-    ${selectedUserType}
-
-    Interests:
-    ${selectedInterests.map((i) => `- ${i}`).join("\n")}
-
-    Experience Level:
-    ${selectedExperience}
-    `.trim();
-
     const payload = {
-      subject: `Integration - ${formData.email}`,
-      mailbody: mailbodyText,
+      template_name: "INTEGRATION",
+      data: {
+        subject: `Integration - ${formData.email}`,
+        name: formData.name,
+        email: formData.email,
+        countryCode: formData.countryCode,
+        phone: formData.phone,
+        userType: selectedUserType,
+        interests: selectedInterests,
+        experienceLevel: selectedExperience,
+      },
     };
 
 
