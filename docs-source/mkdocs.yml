@@ -129,9 +129,11 @@ nav:
       - Market Data:
           # previously: rest-apis/market-quotes.md etc.
           - Bhavcopy (EOD Reports): rest-api/market-data/bhavcopy.md
+          - Current Price: rest-api/market-data/current-price.md
           - Market Quotes: rest-api/market-data/market-quotes.md
           - Historical Market Data: rest-api/market-data/historical-market-data.md
           - Option Chain: rest-api/market-data/option-chain.md
+          - Realtime Data: rest-api/market-data/realtime-data.md
 
       - Trading:
           - Overview: rest-api/trading/orders/orders.md
