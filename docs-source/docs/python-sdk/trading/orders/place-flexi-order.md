@@ -213,3 +213,5 @@ class GetBasketV2:
 >Aggressive limit order - The limit price entered has to be greater than LTP
 
 >Passive Limit order - The limit price entered has to be lesser than the LTP.
+
+>Cancel Flexi order - The Cancel flexi placed while Flexi order is being executed will lead to improper fills. 

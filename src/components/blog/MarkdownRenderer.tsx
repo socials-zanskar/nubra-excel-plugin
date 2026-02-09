@@ -4,6 +4,8 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import Prism from "prismjs";
+import "prismjs/components/prism-python";
 
 interface MarkdownRendererProps {
   content: string;
@@ -39,7 +41,15 @@ export const MarkdownRenderer = ({ content }: MarkdownRendererProps) => {
         btn.classList.toggle("is-active", btn.dataset.brokerTarget === target);
       });
 
-      output.textContent = (source.value || source.textContent || "").trim();
+      const code = (source.value || source.textContent || "").trim();
+      const language = output.dataset.brokerLanguage || "python";
+
+      if (Prism.languages[language]) {
+        output.innerHTML = Prism.highlight(code, Prism.languages[language], language);
+        output.setAttribute("data-language", language);
+      } else {
+        output.textContent = code;
+      }
     };
 
     const handleClick = (event: Event) => {
