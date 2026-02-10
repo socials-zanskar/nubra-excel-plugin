@@ -54,7 +54,7 @@ export const TradingEnvironmentSection = () => {
             <h3 className="text-sm font-semibold text-[#6E83FB] uppercase tracking-wider mb-4 text-center transition-colors duration-300 group-hover:text-[#6E83FB]/90">
               UAT Trading
             </h3>
-            <GlassCard hover className="relative overflow-hidden p-2 flex items-center justify-center w-[75%]">
+            <GlassCard hover className="relative overflow-hidden p-2 flex items-center justify-center w-[75%] transition-all duration-300 ease-out group-hover:-translate-y-1 group-hover:shadow-[0_16px_36px_hsl(245_82%_67%/0.18),0_6px_18px_hsl(0_0%_0%/0.45),0_0_22px_hsl(245_82%_67%/0.28)]">
               <img
                 src={UATGif}
                 alt="UAT Trading - Simulate live market conditions"
@@ -77,7 +77,7 @@ export const TradingEnvironmentSection = () => {
             <h3 className="text-sm font-semibold text-[#6E83FB] uppercase tracking-wider mb-4 text-center transition-colors duration-300 group-hover:text-[#6E83FB]/90">
               Live Trading
             </h3>
-            <GlassCard hover className="relative overflow-hidden p-2 flex items-center justify-center w-[75%]">
+            <GlassCard hover className="relative overflow-hidden p-2 flex items-center justify-center w-[75%] transition-all duration-300 ease-out group-hover:-translate-y-1 group-hover:shadow-[0_16px_36px_hsl(245_82%_67%/0.18),0_6px_18px_hsl(0_0%_0%/0.45),0_0_22px_hsl(245_82%_67%/0.28)]">
               <img
                 src={PRODGif}
                 alt="Live Trading - Monitor real positions and P&L"

@@ -36,6 +36,45 @@
     color: rgba(255, 255, 255, 0.7);
 }
 
+/* GitHub icon below search (absolute; no layout shift) */
+.md-header {
+    position: relative;
+}
+
+.md-header__github-below-search {
+    position: absolute;
+    top: calc(var(--md-header-height) - 0.2rem);
+    left: 12.75rem; /* aligns under search on desktop */
+    transform: translateY(-50%);
+    width: 2rem;
+    height: 2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    color: #ffffff;
+    text-decoration: none;
+    z-index: 5;
+}
+
+.md-header__github-below-search:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.md-header__github-below-search .md-icon svg {
+    width: 1.1rem;
+    height: 1.1rem;
+    fill: currentColor;
+}
+
+@media (max-width: 600px) {
+    .md-header__github-below-search {
+        left: 8.75rem;
+        width: 1.75rem;
+        height: 1.75rem;
+    }
+}
+
 /* Light mode search styling */
 [data-md-color-scheme="default"] .md-search__input {
     color: #000000 !important;
@@ -118,50 +157,3 @@
   }
 }
 
-.md-header__github-below-search {
-  position: absolute;
-  top: 56px;          /* adjust slightly if needed */
-  right: 44px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  opacity: 0.85;
-  z-index: 20;
-}
-
-.md-header__github-below-search a {
-  color: var(--md-default-fg-color);
-  text-decoration: none;
-}
-
-.md-header__github-below-search a:hover {
-  opacity: 1;
-}
-
-.md-header__github-below-search .md-icon {
-  width: 18px;
-  height: 18px;
-}
-
-.md-header__github-below-search a {
-  background: #ffffff;
-  border-radius: 50%;
-  width: 34px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-  color: #000 !important;
-}
-
-.md-header__github-below-search .md-icon svg {
-  width: 18px;
-  height: 18px;
-  fill: #000 !important;
-}
-
-.md-header__github-below-search .github-text {
-  display: none; /* icon-only, cleaner */
-}

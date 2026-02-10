@@ -15,7 +15,7 @@ const Footer = () => {
             API Documentation
           </a>
           <a
-            href="https://test.pypi.org/project/nubra-sdk/"
+            href="https://pypi.org/project/nubra-sdk/"
             target="_blank"
             rel="noopener noreferrer"
             className="text-muted-foreground hover:text-foreground/80 transition-colors font-medium"

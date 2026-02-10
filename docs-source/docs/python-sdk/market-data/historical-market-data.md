@@ -144,3 +144,245 @@ Historical Data API provides the candle data(Open, High, Low, Close) with timest
     | result[].values[].{symbol}.{field}[].timestamp | Timestamp in nanoseconds |
     | result[].values[].{symbol}.{field}[].value | Value for the field at given timestamp |
 
+## Historical Data — Examples
+
+Below are **ready-to-use examples** showing how to query Historical Data for different Asset Types
+
+=== "Expired Options Data"
+
+    ```python
+    from nubra_python_sdk.marketdata.market_data import MarketData
+    from nubra_python_sdk.start_sdk import InitNubraSdk, NubraEnv
+    import pandas as pd
+    pd.set_option('display.max_columns', None)     # Show all columns
+    pd.set_option('display.max_rows', 1000)         # Limit to 100 rows
+    pd.set_option('display.max_colwidth', None)    # Show full cell contents
+    pd.set_option('display.width', 0)
+
+    # -------------------------------
+    # Initialize Nubra SDK
+    # -------------------------------
+    nubra = InitNubraSdk(NubraEnv.PROD, env_creds=True)
+    mdInstance = MarketData(nubra)
+
+    # -------------------------------
+    # Fetch historical data
+    # -------------------------------
+    instruments = ['NIFTY2611326000CE','NIFTY25D2326000CE']
+
+    response = mdInstance.historical_data({
+        "exchange": "NSE",
+        "type": "OPT",
+        "values": instruments,
+        "fields": ["open", "high", "low", "close", "cumulative_volume","theta","delta","gamma","vega","iv_mid",'cumulative_oi'],
+        "startDate": "2025-12-01T11:01:57.000Z",
+        "endDate": "2026-01-14T06:13:57.000Z",
+        "interval": "1d",
+        "intraDay": False,
+        "realTime": False
+    })
+
+    # -------------------------------
+    # Helper function
+    # -------------------------------
+    def tsp_list_to_series(tsp_list):
+        return pd.Series(
+            data=[p.value for p in tsp_list],
+            index=pd.to_datetime([p.timestamp for p in tsp_list], unit="ns")
+        )
+
+    # -------------------------------
+    # Convert ALL instruments dynamically
+    # -------------------------------
+    dfs = {}
+
+    for instrument_dict in response.result[0].values:
+        for symbol, stock_chart in instrument_dict.items():
+
+            df = pd.DataFrame({
+                "open": tsp_list_to_series(stock_chart.open),
+                "high": tsp_list_to_series(stock_chart.high),
+                "low": tsp_list_to_series(stock_chart.low),
+                "close": tsp_list_to_series(stock_chart.close),
+                "volume": tsp_list_to_series(stock_chart.cumulative_volume),
+                "theta": tsp_list_to_series(stock_chart.theta),
+                "delta": tsp_list_to_series(stock_chart.delta),
+                "gamma": tsp_list_to_series(stock_chart.gamma),
+                "vega": tsp_list_to_series(stock_chart.vega),
+                "iv_mid": tsp_list_to_series(stock_chart.iv_mid),
+                "cumulative_oi": tsp_list_to_series(stock_chart.cumulative_oi),
+            })
+
+            df.sort_index(inplace=True)
+            df["symbol"] = symbol  # optional
+            dfs[symbol] = df
+
+    # -------------------------------
+    # Example usage
+    # -------------------------------
+    print(f"{instruments[0]} Historical data with greeks")
+    print(dfs[instruments[0]].head())
+    print('\n')
+    print(f"{instruments[1]} Historical data with greeks")
+    print(dfs[instruments[1]].head())
+    ```
+
+    **Explanation**
+
+    - Replace the instruments using `expired options names` of the last 3 months
+
+=== "Indices Data"
+
+    ```python
+    import pandas as pd
+    from nubra_python_sdk.marketdata.market_data import MarketData
+    from nubra_python_sdk.start_sdk import InitNubraSdk, NubraEnv
+
+    # -------------------------------
+    # Initialize Nubra SDK
+    # -------------------------------
+    nubra = InitNubraSdk(NubraEnv.PROD, env_creds=True)
+    mdInstance = MarketData(nubra)
+
+    # -------------------------------
+    # Fetch historical data
+    # -------------------------------
+    instruments = ["NIFTY"]
+
+    response = mdInstance.historical_data({
+        "exchange": "NSE",
+        "type": "INDEX",
+        "values": instruments,
+        "fields": ["open", "high", "low", "close", "cumulative_volume"],
+        "startDate": "2016-02-01T11:01:57.000Z",
+        "endDate": "2026-02-04T06:18:57.000Z",
+        "interval": "1mt",
+        "intraDay": False,
+        "realTime": False
+    })
+
+    # -------------------------------
+    # Helper function (values only)
+    # -------------------------------
+    def tsp_values(tsp_list):
+        return [p.value for p in tsp_list]
+
+    # -------------------------------
+    # Convert response to DataFrames
+    # -------------------------------
+    dfs = {}
+
+    for instrument_dict in response.result[0].values:
+        for symbol, stock_chart in instrument_dict.items():
+
+            # Create timestamp index ONCE
+            index = pd.to_datetime(
+                [p.timestamp for p in stock_chart.open],
+                unit="ns"
+            )
+
+            df = pd.DataFrame(
+                {
+                    "open": tsp_values(stock_chart.open),
+                    "high": tsp_values(stock_chart.high),
+                    "low": tsp_values(stock_chart.low),
+                    "close": tsp_values(stock_chart.close),
+                    "volume": tsp_values(stock_chart.cumulative_volume),
+                },
+                index=index
+            )
+
+            df.sort_index(inplace=True)
+
+            # -------------------------------
+            # Scale price columns (paise → rupees)
+            # Only non-null values are affected
+            # -------------------------------
+            price_cols = ["open", "high", "low", "close"]
+            df[price_cols] = df[price_cols].div(100)
+
+            df["symbol"] = symbol  # optional
+            dfs[symbol] = df
+
+    # -------------------------------
+    # Example usage
+    # -------------------------------
+    print(dfs["NIFTY"])
+    ```
+
+    **Explanation**
+
+    - Change or add `indices` to the instruments list
+
+
+=== "Stocks Data"
+
+    ```python
+    import pandas as pd
+    from nubra_python_sdk.marketdata.market_data import MarketData
+    from nubra_python_sdk.start_sdk import InitNubraSdk, NubraEnv
+
+    # -------------------------------
+    # Initialize Nubra SDK
+    # -------------------------------
+    nubra = InitNubraSdk(NubraEnv.PROD, env_creds=True)
+    mdInstance = MarketData(nubra)
+
+    # -------------------------------
+    # Fetch historical data
+    # -------------------------------
+    instruments = ["RELIANCE"]
+
+    response = mdInstance.historical_data({
+        "exchange": "NSE",
+        "type": "STOCK",
+        "values": instruments,
+        "fields": ["open", "high", "low", "close", "cumulative_volume"],
+        "startDate": "2026-02-05T03:30:00.000Z",
+        "endDate": "2026-02-05T11:30:00.000Z",
+        "interval": "3m",
+        "intraDay": False,
+        "realTime": False
+    })
+
+    # -------------------------------
+    # Helper function
+    # -------------------------------
+    def tsp_list_to_series(tsp_list):
+        idx = pd.to_datetime(
+            [p.timestamp for p in tsp_list],
+            unit="ns",
+            utc=True  # tells pandas this is UTC
+        ).tz_convert("Asia/Kolkata")  # convert to IST
+
+        return pd.Series(
+            data=[p.value for p in tsp_list],
+            index=idx
+        )
+
+
+    # -------------------------------
+    # Convert ALL instruments dynamically
+    # -------------------------------
+    dfs = {}
+
+    for instrument_dict in response.result[0].values:
+        for symbol, stock_chart in instrument_dict.items():
+
+            df = pd.DataFrame({
+                "open": tsp_list_to_series(stock_chart.open),
+                "high": tsp_list_to_series(stock_chart.high),
+                "low": tsp_list_to_series(stock_chart.low),
+                "close": tsp_list_to_series(stock_chart.close),
+                "volume": tsp_list_to_series(stock_chart.cumulative_volume),
+            })
+
+            df.sort_index(inplace=True)
+            df["symbol"] = symbol  # optional
+            dfs[symbol] = df
+
+    # -------------------------------
+    # Example usage
+    # -------------------------------
+    print(dfs["RELIANCE"])
+    ```

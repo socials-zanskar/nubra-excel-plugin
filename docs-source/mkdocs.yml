@@ -2,7 +2,7 @@ site_name: API Documentation
 site_description: Documentation for Nubra APIs and Client SDKs or Libraries
 site_author: Nubra
 site_url: https://nubra.io/products/api/docs
-#repo_url: https://github.com/NubraHQ/nubra-api-examples
+ #repo_url: https://github.com/NubraAPI
 use_directory_urls: false
 copyright: Copyright © 2025 Zanskar Securities Private Limited. All rights reserved.
 

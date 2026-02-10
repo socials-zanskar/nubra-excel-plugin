@@ -2,7 +2,7 @@ import { NavBar } from "@/components/NavBar";
 import { HeroSection } from "@/components/HeroSection";
 import { CodeDemoSection } from "@/components/CodeDemoSection";
 import { TradingEnvironmentSection } from "@/components/TradingEnvironmentSection";
-import { IntegrationSection } from "@/components/IntegrationSection";
+import { PricingSection } from "@/components/PricingSection";
 import { Footer } from "@/components/Footer";
 
 const SectionDivider = () => (
@@ -29,7 +29,7 @@ const Index = () => {
       <SectionDivider />
       <TradingEnvironmentSection />
       <SectionDivider />
-      <IntegrationSection />
+      <PricingSection />
       <Footer />
     </main>
   );

@@ -63,7 +63,7 @@ instruments_df = instruments.get_instruments_dataframe()
 print(f"Total instruments: {len(instruments_df)}\n\n")
 
 # Get instrument by reference ID. Internal Reference ID from Nubra.
-instrument = instruments.get_instrument_by_ref_id(69694)
+instrument = instruments.get_instrument_by_ref_id(1842210)
 print(f"Instrument details: {instrument}\n\n")
 
 # Get instrument by instrument trading symbol eg: HDFCBANK25MAY2380CE, TATAMOTORS, NIFTY2550822400PE and exchange= "NSE"/"BSE"

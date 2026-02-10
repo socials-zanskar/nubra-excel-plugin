@@ -1,6 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,7 +8,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Menu, X, ChevronDown } from "lucide-react";
 import activePill from "@/assets/active-pill.png";
-import nubraLogo from "@/assets/nubra-logo.png";
+import nubraLogo from "@/assets/Nubra Logo.png";
 
 const developerItems = [
   { label: "API Docs", href: "/products/api/docs/", isExternal: true },
@@ -19,6 +18,7 @@ const developerItems = [
 const communityItems = [
   { label: "Webinar", href: "/webinars" },
   { label: "Blogs", href: "/blogs" },
+  { label: "Integrate with Nubra", href: "/integrate" },
 ];
 
 export const NavBar = () => {
@@ -33,7 +33,13 @@ export const NavBar = () => {
   const getActiveIndex = () => {
     if (location.pathname === "/") return 0;
     if (location.pathname.startsWith("/use-cases")) return 1;
-    if (location.pathname.startsWith("/webinars") || location.pathname.startsWith("/blogs")) return 2;
+    if (
+      location.pathname.startsWith("/webinars") ||
+      location.pathname.startsWith("/blogs") ||
+      location.pathname.startsWith("/integrate")
+    ) {
+      return 2;
+    }
     return 0;
   };
 
@@ -52,19 +58,21 @@ export const NavBar = () => {
 
   const isDeveloperActive = location.pathname.startsWith("/use-cases");
   const isCommunityActive =
-    location.pathname.startsWith("/webinars") || location.pathname.startsWith("/blogs");
+    location.pathname.startsWith("/webinars") ||
+    location.pathname.startsWith("/blogs") ||
+    location.pathname.startsWith("/integrate");
 
   const navigate = useNavigate();
 
-  const handleIntegrateClick = () => {
+  const handlePricingClick = () => {
     setMobileMenuOpen(false);
     if (location.pathname !== '/') {
       navigate('/');
       setTimeout(() => {
-        document.getElementById('integrate')?.scrollIntoView({ behavior: 'smooth' });
+        document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
     } else {
-      document.getElementById('integrate')?.scrollIntoView({ behavior: 'smooth' });
+      document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
     }
   };
 
@@ -96,7 +104,7 @@ export const NavBar = () => {
               ${location.pathname === "/" ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground"}
             `}
           >
-            <img src={nubraLogo} alt="" className="w-[18px] h-[12px]" />
+            <img src={nubraLogo} alt="" className="w-[18px] h-[18px]" />
             Nubra API
           </Link>
 
@@ -150,10 +158,8 @@ export const NavBar = () => {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <a
-            href="https://nubra.io/pricing"
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={handlePricingClick}
             className={`
               relative z-10 flex items-center justify-center gap-2 w-[120px] py-2 rounded-full text-sm font-medium transition-colors duration-200
               focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50
@@ -161,22 +167,16 @@ export const NavBar = () => {
             `}
           >
             Pricing
-          </a>
+          </button>
         </div>
 
-        {/* Integrate with Nubra button */}
-        <Button 
-          onClick={handleIntegrateClick}
-          className="rounded-full px-6 py-2 text-sm font-medium"
-        >
-          Integrate with Nubra
-        </Button>
+        {/* Integrate with Nubra button removed; moved into Community dropdown */}
       </div>
 
       {/* Mobile Navigation */}
       <div className="md:hidden flex items-center justify-between px-4 py-2 rounded-full bg-white/5 backdrop-blur-xl border border-white/10 shadow-lg shadow-black/20">
         <Link to="/" className="flex items-center gap-2">
-          <img src={nubraLogo} alt="Nubra" className="w-[18px] h-[12px]" />
+          <img src={nubraLogo} alt="Nubra" className="w-[18px] h-[18px]" />
           <span className="text-sm font-medium text-foreground">Nubra API</span>
         </Link>
         <button
@@ -248,20 +248,12 @@ export const NavBar = () => {
               </Link>
             ))}
 
-            <a
-              href="https://nubra.io/pricing"
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              onClick={handlePricingClick}
               className="px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 rounded-lg transition-colors"
             >
               Pricing
-            </a>
-            <Button 
-              onClick={handleIntegrateClick}
-              className="mt-2 rounded-full px-6 py-2 text-sm font-medium"
-            >
-              Integrate with Nubra
-            </Button>
+            </button>
           </div>
         </div>
       )}

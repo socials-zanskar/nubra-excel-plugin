@@ -14,6 +14,18 @@ This section documents Nubra's WebSocket streams for real-time market data in th
 
 ---
 
+## WebSocket Stream Controls
+
+These controls modify how WebSocket streams behave across channels, including update frequency and market mode.
+
+| Feature | Command | Scope | Description |
+|---|---|---|---|
+| [Stream Interval](#stream-interval-control) | `socket_interval` | Per channel | Controls the update frequency of WebSocket streams (tick, seconds, or minutes). |
+| [Post Market Data](#post-market-data) | `post_market` | Connection-level | Enables static post-market data for testing and validation after market hours. |
+
+
+---
+
 ## Message Envelope (GenericData)
 
 All WebSocket payloads are wrapped in a common envelope.
@@ -87,6 +99,29 @@ Notes:
 - `interval` and `exchange` are specified at the message level. Send separate messages per exchange and interval.
 - Both index symbols and instrument symbols go in the `indexes` array. The response separates them into `indexes` and `instruments`.
 - The JSON object must not contain spaces.
+- **Interval values are represented in the payload as an `Interval` enum.** The subscribe command still accepts the string form (e.g., `2m`).
+
+---
+
+### Supported Intervals
+
+The server accepts the following interval strings in the subscribe command:
+
+- `1s`, `5s`, `10s`, `30s`
+- `1m`, `2m`, `3m`, `5m`, `10m`, `15m`, `30m`
+- `1h`, `2h`, `4h`
+- `1d`
+- `1w`
+- `1mt`
+- `1yr`
+
+> **Important:** Although the `Interval` enum includes values from `INTERVAL_INVALID = 0` through `INTERVAL_1_YEAR = 16`, **the following enum values are currently not available for `index_bucket`:**
+- `INTERVAL_INVALID = 0`
+- `INTERVAL_1_SECOND = 1`
+- `INTERVAL_10_SECOND = 2`
+- `INTERVAL_1_YEAR = 16`
+
+---
 
 ### Payload (Proto)
 
@@ -115,16 +150,91 @@ message WebSocketMsgIndexBucket {
 
 ---
 
+### Interval Enum (Proto)
+
+```proto
+enum Interval {
+  INTERVAL_INVALID = 0;
+  INTERVAL_1_SECOND = 1;
+  INTERVAL_10_SECOND = 2;
+  INTERVAL_1_MINUTE = 3;
+  INTERVAL_2_MINUTE = 4;
+  INTERVAL_3_MINUTE = 5;
+  INTERVAL_5_MINUTE = 6;
+  INTERVAL_10_MINUTE = 7;
+  INTERVAL_15_MINUTE = 8;
+  INTERVAL_30_MINUTE = 9;
+  INTERVAL_1_HOUR = 10;
+  INTERVAL_2_HOUR = 11;
+  INTERVAL_4_HOUR = 12;
+  INTERVAL_1_DAY = 13;
+  INTERVAL_1_WEEK = 14;
+  INTERVAL_1_MONTH = 15;
+  INTERVAL_1_YEAR = 16;
+}
+```
+
+---
+
+### Interval Mapping (Subscribe String → Enum)
+
+Use these mappings to interpret `WebSocketMsgIndexBucket.interval`:
+
+- `1m` → `INTERVAL_1_MINUTE (3)`
+- `2m` → `INTERVAL_2_MINUTE (4)`
+- `3m` → `INTERVAL_3_MINUTE (5)`
+- `5m` → `INTERVAL_5_MINUTE (6)`
+- `10m` → `INTERVAL_10_MINUTE (7)`
+- `15m` → `INTERVAL_15_MINUTE (8)`
+- `30m` → `INTERVAL_30_MINUTE (9)`
+- `1h` → `INTERVAL_1_HOUR (10)`
+- `2h` → `INTERVAL_2_HOUR (11)`
+- `4h` → `INTERVAL_4_HOUR (12)`
+- `1d` → `INTERVAL_1_DAY (13)`
+- `1w` → `INTERVAL_1_WEEK (14)`
+- `1mt` → `INTERVAL_1_MONTH (15)`
+
+> Note: Even if the subscribe command allows `1s`, `5s`, `10s`, `30s`, the payload enum set shown above does **not** include `5s` or `30s` values.
+
+
+---
+
 ## 3. Order Book
 
 **Channel:** `orderbook`
 
+Provides real-time market depth (bids/asks), LTP, volume, and trade quantity for subscribed instruments.
+
+---
+
 ### Subscribe / Unsubscribe
+
+#### Full Depth (Default – up to 20 levels)
 
 ```
 SUBSCRIBE:   batch_subscribe [token] orderbook {"instruments":[1120031,73009]}
 UNSUBSCRIBE: batch_unsubscribe [token] orderbook {"instruments":[1120031,73009]}
 ```
+
+By default, the order book stream sends **up to 20 bid and ask levels** per instrument.
+
+---
+
+### Order Book Depth (Selective Levels)
+
+Users can subscribe to a **specific depth level (1–20)** instead of receiving all 20 levels.
+
+```
+MESSAGE: batch_subscribe [token] orderbook_depth 4
+```
+
+Notes:
+- Depth levels can range from **1 to 20**.
+- This setting applies to the `orderbook` channel.
+- Example: `orderbook_depth 4` will stream **top 4 bid and ask levels only**, reducing bandwidth and processing load.
+- If not specified, the default depth is **20 levels**.
+
+---
 
 ### Payload (Proto)
 
@@ -151,6 +261,15 @@ message OrderBookLevel {
   int64 orders = 3;
 }
 ```
+
+---
+
+### Notes
+
+- The number of `bids` and `asks` entries in the payload depends on the subscribed **order book depth**.
+- `bids[0]` and `asks[0]` represent the **best bid and best ask** respectively.
+- Depth subscription helps optimize performance for latency-sensitive strategies.
+
 
 ---
 
@@ -223,3 +342,135 @@ message WebSocketMsgOptionChainUpdate {
   string exchange = 7;
 }
 ```
+
+## Stream Interval Control
+
+Users can control the **update frequency** of WebSocket streams by subscribing to a stream interval. This helps balance latency, bandwidth usage, and subscription limits.
+
+---
+
+### Set Stream Interval
+
+```
+MESSAGE: batch_subscribe [token] socket_interval option 1m
+```
+
+Notes:
+- The stream interval applies to the specified **channel** (e.g., `option`, `index`, `orderbook`, etc.).
+- Interval settings are **connection-level** and affect all subsequent subscriptions on that channel unless changed.
+- If no interval is specified, the default behavior is **tick-level streaming**.
+
+---
+
+### Supported Stream Intervals
+
+The following interval strings are supported:
+
+- `1s`
+- `5s`
+- `10s`
+- `30s`
+- `1m`
+- `5m`
+- `10m`
+
+---
+
+### Subscription Limits by Interval
+
+#### Second-Based Intervals (Limited)
+
+The following intervals have **standard subscription limits**:
+
+- `1s`
+- `5s`
+- `10s`
+- `30s`
+
+Notes:
+- These intervals are subject to per-connection and per-channel subscription limits.
+- Recommended for latency-sensitive strategies requiring near real-time updates.
+
+---
+
+#### Minute-Based Intervals (Unlimited)
+
+The following intervals currently have **no subscription limits**:
+
+- `1m`
+- `5m`
+- `10m`
+
+Notes:
+- You can subscribe to **any number of instruments** when using these intervals.
+- Ideal for strategies focused on candle-based logic, scans, or lower-frequency signals.
+- Significantly reduces bandwidth and processing overhead compared to second-level streams.
+
+---
+
+### Example
+
+Subscribe to the option chain stream with 1-minute updates:
+
+```
+MESSAGE: batch_subscribe [token] socket_interval option 1m
+MESSAGE: batch_subscribe [token] option [{"exchange":"NSE","asset":"NIFTY","expiry":"20260203"}]
+```
+
+---
+
+### Best Practices
+
+- Use **second-based intervals** only when necessary for execution or market-making strategies.
+- Prefer **minute-based intervals** for monitoring, analytics, and signal generation.
+- Combine `socket_interval` with features like **order book depth control** to further optimize performance.
+
+
+## Post Market Data
+
+Post market data is available for **testing and validation purposes**. This data represents the **end-of-day static snapshot** of the market and does not stream live updates.
+
+---
+
+### Enable Post Market Mode
+
+```
+MESSAGE: batch_subscribe [token] post_market true
+```
+
+Notes:
+- When enabled, WebSocket streams return **static post-market data** instead of live ticks.
+- Data remains unchanged for the duration of the session.
+- This mode is intended for:
+  - Strategy testing
+  - Backtesting validation
+  - UI and integration development
+- Post market data is available only after the market has closed.
+
+---
+
+### Key Characteristics
+
+- **Static data** (no real-time updates)
+- Uses the **same payload structures** as live streams
+- Safe to use without impacting live market limits
+- Ideal for non-market-hour testing and demos
+
+---
+
+### Example Workflow
+
+Enable post market mode and subscribe to an index stream:
+
+```
+MESSAGE: batch_subscribe [token] post_market true
+MESSAGE: batch_subscribe [token] index {"indexes":["NIFTY","BANKNIFTY"]} NSE
+```
+
+---
+
+### Notes
+
+- Post market mode applies at the **connection level**.
+- To resume live data, reconnect and do not enable `post_market`.
+- Subscription limits may differ from live market streams.

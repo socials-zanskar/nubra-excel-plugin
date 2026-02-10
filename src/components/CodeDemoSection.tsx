@@ -367,7 +367,7 @@ export const CodeDemoSection = () => {
       <div className="relative z-10 container mx-auto px-6 md:px-8">
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-4">
-            Smart Order Types built for{" "}
+            <span className="text-[#6E83FB]">Smart Order</span> Types built for{" "}
             <span className="text-[#6E83FB]">Speed</span>
           </h2>
           <p className="text-muted-foreground text-lg md:text-xl max-w-3xl mx-auto">

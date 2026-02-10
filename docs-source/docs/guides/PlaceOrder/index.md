@@ -198,21 +198,23 @@ map directly to the 4 pillars you just saw above.
     from nubra_python_sdk.start_sdk import InitNubraSdk, NubraEnv
     from nubra_python_sdk.marketdata.market_data import MarketData
     from nubra_python_sdk.trading.trading_data import NubraTrader
+    from nubra_python_sdk.refdata.instruments import InstrumentData
 
     # 1. Initialize Nubra SDK (Use NubraEnv.PROD for live trading)
     nubra = InitNubraSdk(NubraEnv.UAT)
-
-    # 2. Fetch Market Quote
+    instruments = InstrumentData(nubra)
     md = MarketData(nubra)
+    trade = NubraTrader(nubra, version="V2")
 
-    REF_ID = 1842210
+    # 2. Get Ref ID of instrument
+    REF_ID = instruments.get_instrument_by_symbol('RELIANCE', exchange='NSE').ref_id
+
+    # 3. Fetch LTP of instrument
     quote = md.quote(ref_id=REF_ID, levels=5)
     ltp = quote.orderBook.last_traded_price
     print(f"Last Traded Price (LTP): {ltp}")
 
-    # 3. Place Order using LTP
-    trade = NubraTrader(nubra, version="V2")
-
+    # 4. Place Order using LTP
     result = trade.create_order({
         "ref_id": REF_ID,
         "order_type": "ORDER_TYPE_STOPLOSS",
@@ -246,14 +248,19 @@ map directly to the 4 pillars you just saw above.
     ```python
     from nubra_python_sdk.start_sdk import InitNubraSdk, NubraEnv
     from nubra_python_sdk.trading.trading_data import NubraTrader
+    from nubra_python_sdk.refdata.instruments import InstrumentData
 
     # 1. Initialize Nubra SDK (Use NubraEnv.PROD for live trading)
     nubra = InitNubraSdk(NubraEnv.UAT)
     trade = NubraTrader(nubra, version="V2")
+    instruments = InstrumentData(nubra)
 
-    # 2. Place Order using Market
+    # 2. Get Ref ID of instrument
+    REF_ID = instruments.get_instrument_by_symbol('TCS', exchange='NSE').ref_id
+
+    # 3. Place Order using Market
     result = trade.create_order({
-        "ref_id": 1842210,
+        "ref_id": REF_ID,
         "order_side": "ORDER_SIDE_BUY",
         "order_type": "ORDER_TYPE_REGULAR",
         "price_type": "MARKET",
@@ -285,11 +292,15 @@ map directly to the 4 pillars you just saw above.
 
     # 1. Initialize Nubra SDK (Use NubraEnv.PROD for live trading)
     nubra = InitNubraSdk(NubraEnv.UAT)
+    md = MarketData(nubra)
+    instruments = InstrumentData(nubra)
+    trade = NubraTrader(nubra, version="V2")
+
+    # 1.1 Get Instrument Ref ID
+    instrument = instruments.get_instrument_by_symbol("HDFCBANK", exchange="NSE")
+    REF_ID = instrument.ref_id
 
     # 2. Fetch Market Quote
-    md = MarketData(nubra)
-
-    REF_ID = 1842210
     quote = md.quote(ref_id=REF_ID, levels=5)
     ltp = quote.orderBook.last_traded_price
     print(f"Last Traded Price (LTP): {ltp}")
@@ -335,17 +346,20 @@ map directly to the 4 pillars you just saw above.
 
     # 1. Initialize Nubra SDK (Use NubraEnv.PROD for live trading)
     nubra = InitNubraSdk(NubraEnv.UAT)
+    md = MarketData(nubra)
+    instruments = InstrumentData(nubra)
+    trade = NubraTrader(nubra, version="V2")
+
+    # 1.1 Get Instrument Ref ID
+    instrument = instruments.get_instrument_by_symbol("ICICIBANK", exchange="NSE")
+    REF_ID = instrument.ref_id
 
     # 2. Fetch Market Quote
-    md = MarketData(nubra)
-
-    REF_ID = 1842210
     quote = md.quote(ref_id=REF_ID, levels=5)
     ltp = quote.orderBook.last_traded_price
     print(f"Last Traded Price (LTP): {ltp}")
 
     # 3. Place Order using LTP
-    trade = NubraTrader(nubra, version="V2")
 
     result = trade.create_order({
         "ref_id": REF_ID,
@@ -381,21 +395,24 @@ map directly to the 4 pillars you just saw above.
     from nubra_python_sdk.start_sdk import InitNubraSdk, NubraEnv
     from nubra_python_sdk.marketdata.market_data import MarketData
     from nubra_python_sdk.trading.trading_data import NubraTrader
+    from nubra_python_sdk.refdata.instruments import InstrumentData
 
     # 1. Initialize Nubra SDK (Use NubraEnv.PROD for live trading)
     nubra = InitNubraSdk(NubraEnv.UAT)
+    md = MarketData(nubra)
+    instruments = InstrumentData(nubra)
+    trade = NubraTrader(nubra, version="V2")
+
+    # 1.1 Get Instrument Ref ID
+    instrument = instruments.get_instrument_by_symbol("RELIANCE", exchange="NSE")
+    REF_ID = instrument.ref_id
 
     # 2. Fetch Market Quote
-    md = MarketData(nubra)
-
-    REF_ID = 1842210
     quote = md.quote(ref_id=REF_ID, levels=5)
     ltp = quote.orderBook.last_traded_price
     print(f"Last Traded Price (LTP): {ltp}")
 
     # 3. Place ICEBERG Order
-    trade = NubraTrader(nubra, version="V2")
-
     TOTAL_QTY = 1000      # Total quantity to trade
     LEG_SIZE = 100        # Visible quantity per leg
 

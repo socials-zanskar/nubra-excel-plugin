@@ -9,6 +9,7 @@ import Blogs from "./pages/Blogs";
 import BlogPost from "./pages/BlogPost";
 import UseCases from "./pages/UseCases";
 import UseCasePost from "./pages/UseCasePost";
+import Integrate from "./pages/Integrate";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/blogs/:slug" element={<BlogPost />} />
           <Route path="/use-cases" element={<UseCases />} />
           <Route path="/use-cases/:slug" element={<UseCasePost />} />
+          <Route path="/integrate" element={<Integrate />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
