@@ -13,27 +13,27 @@ export const HeroSection = () => {
       src: MarketDataAPIBG,
       alt: "Market Data API",
       caption: [
-        "Real-time 20-level order book, option chain, and more",
-        "Historical data across equities, futures, and options",
-        "Subscribe to 10,000+ instruments simultaneously"
+        "20-level order book and option chain",
+        "Historical equities, futures, and options data",
+        "10,000+ instrument subscriptions"
       ]
     },
     {
       src: PortfolioAPIBG,
       alt: "Portfolio API",
       caption: [
-        "Detailed holdings with real-time PnL and margin insights",
-        "Comprehensive positions tracking with realised and unrealised PnL",
-        "Live funds and margin breakdown for accurate capital management"
+        "Real-time holdings with PnL and margin",
+        "Positions with realised and unrealised PnL",
+        "Live funds and margin overview"
       ]
     },
     {
       src: TradingAPIBG,
       alt: "Trading API",
       caption: [
-        "Single, multi, and F&O order execution APIs",
-        "Margin checks for accurate position sizing",
-        "Modify and cancel orders seamlessly across types"
+        "Single, multi, and F&O order APIs",
+        "Margin checks for position sizing",
+        "Modify and cancel orders seamlessly"
       ]
     }
   ];
