@@ -50,7 +50,7 @@ from nubra_python_sdk.start_sdk import InitNubraSdk, NubraEnv
 
 # Initialize the Nubra SDK client
 # Use NubraEnv.UAT for testing or NubraEnv.PROD for production
-nubra = InitNubraSdk(NubraEnv.UAT)  # or NubraEnv.PROD
+nubra = InitNubraSdk(NubraEnv.PROD)  # or NubraEnv.PROD
 
 ##using totp login and .env file 
 #nubra = InitNubraSdk(NubraEnv.UAT, totp_login= True ,env_creds = True) 
@@ -63,7 +63,7 @@ instruments_df = instruments.get_instruments_dataframe()
 print(f"Total instruments: {len(instruments_df)}\n\n")
 
 # Get instrument by reference ID. Internal Reference ID from Nubra.
-instrument = instruments.get_instrument_by_ref_id(1842210)
+instrument = instruments.get_instrument_by_ref_id(71878)
 print(f"Instrument details: {instrument}\n\n")
 
 # Get instrument by instrument trading symbol eg: HDFCBANK25MAY2380CE, TATAMOTORS, NIFTY2550822400PE and exchange= "NSE"/"BSE"
@@ -71,7 +71,7 @@ instrument = instruments.get_instrument_by_symbol("HDFCBANK", exchange= "BSE")
 print(f"Instrument details: {instrument}\n\n")
 
 # Get instrument by nubra defined name of instrument eg: STOCK_HDFCBANK.NSECM, STOCK_HDFCBANK and exchange= "NSE"/"BSE"
-instrument = instruments.get_instrument_by_nubra_name("STOCK_HDFCBANK.NSECM",exchange= "NSE") 
+instrument = instruments.get_instrument_by_nubra_name("STOCK_HDFCBANK.NSECM") 
 print(f"Instrument details: {instrument}\n\n")
 
 # Fetch multiple instruments matching the pattern passed
@@ -79,8 +79,8 @@ instruments = instruments.get_instruments_by_pattern([{
         "exchange": "NSE",
         "asset": "NIFTY",
         "derivative_type": "OPT",
-        "expiry":"20250522",
-        "strike_price": "24000",
+        "expiry":"20260217",
+        "strike_price": "2580000",
         "option_type": "CE",
         "asset_type": "INDEX_FO"
     }]
@@ -226,7 +226,7 @@ for instrument in instruments:
     print(instrument)
 ```
 
-    ## Get Index Master
+## Get Index Master
 
 In addition to tradable instruments, Nubra provides a **public Index Master** that lists all supported indices along with their metadata.  
 This is useful for:

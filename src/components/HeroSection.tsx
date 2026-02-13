@@ -1,74 +1,47 @@
-import { useState, useCallback, useEffect } from "react";
-import { APIAsset } from "./APIAsset";
-import { APIInfo } from "./InfoCard";
+import { useState, useEffect } from "react";
 
-import PythonRESTBG from "@/assets/PythonRESTBG.png";
-import NubraLogoBG from "@/assets/NubraLogoBG.png";
-import TradingAPIBG from "@/assets/TradingAPIBG.png";
 import MarketDataAPIBG from "@/assets/MarketDataAPIBG.png";
 import PortfolioAPIBG from "@/assets/PortfolioAPIBG.png";
-
-const apiData: Record<string, APIInfo> = {
-  nubraLogo: {
-    id: "nubraLogo",
-    title: "",
-    bullets: [
-      "Nubra APIs are powered by HFT-grade infrastructure, bringing institutional-level features and performance to retail and professional traders",
-    ],
-    cta: "",
-    ctaLink: "",
-  },
-  pythonRest: {
-    id: "pythonRest",
-    title: "Python/REST",
-    bullets: [
-      "Low-level REST APIs for direct system integration",
-      "Python SDKs for beginner-to-expert workflows",
-    ],
-    cta: "View Docs",
-    ctaLink: "/products/api/docs/",
-  },
-  marketData: {
-    id: "marketData",
-    title: "Market Data APIs",
-    bullets: [
-      "Snapshot data for Order Book and Option Chain",
-      "Historical data including Expired Options",
-      "Real-time 20-level Order Book and OHLCV",
-      "Real-time Option Chain and Greeks",
-    ],
-    cta: "View Docs",
-    ctaLink: "/products/api/docs/",
-  },
-  trading: {
-    id: "trading",
-    title: "Trading APIs",
-    bullets: [
-      "Place individual or basket orders",
-      "Build complex F&O strategies using flexi baskets",
-      "Get accurate margin estimates with hedge benefits",
-      "Place, modify, and cancel orders seamlessly",
-    ],
-    cta: "View Docs",
-    ctaLink: "/products/api/docs/",
-  },
-  portfolio: {
-    id: "portfolio",
-    title: "Portfolio APIs",
-    bullets: [
-      "Real-time PnL tracking",
-      "Real-time live cash, margin, and collateral",
-      "Detailed position, PnL, margin benefit, and more",
-    ],
-    cta: "View Docs",
-    ctaLink: "/products/api/docs/",
-  },
-};
+import TradingAPIBG from "@/assets/TradingAPIBG.png";
 
 export const HeroSection = () => {
-  const [activeAsset, setActiveAsset] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
-  const [hasScrolled, setHasScrolled] = useState(false);
+  const [activeHeroImage, setActiveHeroImage] = useState(0);
+
+  const heroImages = [
+    {
+      src: MarketDataAPIBG,
+      alt: "Market Data API",
+      caption: [
+        "Real-time 20-level order book, option chain, and more",
+        "Historical data across equities, futures, and options",
+        "Subscribe to 10,000+ instruments simultaneously"
+      ]
+    },
+    {
+      src: PortfolioAPIBG,
+      alt: "Portfolio API",
+      caption: [
+        "Detailed holdings with real-time PnL and margin insights",
+        "Comprehensive positions tracking with realised and unrealised PnL",
+        "Live funds and margin breakdown for accurate capital management"
+      ]
+    },
+    {
+      src: TradingAPIBG,
+      alt: "Trading API",
+      caption: [
+        "Single, multi, and F&O order execution APIs",
+        "Margin checks for accurate position sizing",
+        "Modify and cancel orders seamlessly across types"
+      ]
+    }
+  ];
+
+  const showPrev = () =>
+    setActiveHeroImage((prev) => (prev - 1 + heroImages.length) % heroImages.length);
+  const showNext = () =>
+    setActiveHeroImage((prev) => (prev + 1) % heroImages.length);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -77,166 +50,106 @@ export const HeroSection = () => {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  useEffect(() => {
-    if (hasScrolled) {
-      return;
-    }
-    const handleScroll = () => setHasScrolled(true);
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [hasScrolled]);
-
-  const handleActivate = useCallback((id: string) => {
-    setActiveAsset(id);
-  }, []);
-
-  const handleDeactivate = useCallback(() => {
-    setActiveAsset(null);
-  }, []);
-
-  const handleScrollActivate = useCallback(
-    (id: string) => {
-      if (activeAsset === id) {
-        return;
-      }
-      setActiveAsset(id);
-    },
-    [activeAsset]
-  );
-
-  const handleOutsideClick = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('[role="button"]') === null) {
-      setActiveAsset(null);
-    }
-  }, []);
-
   if (isMobile) {
     return (
       <section 
         className="relative min-h-screen pt-24 pb-12 px-4 overflow-hidden"
-        onClick={handleOutsideClick}
       >
 
-        <div className="relative z-10 flex flex-col items-center">
+        <div className="relative z-10 flex flex-col items-center text-center">
           {/* Hero Text */}
-          <div className="text-center mb-10">
-            <h1 className="text-3xl font-bold text-foreground mb-2">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-foreground mb-3">
               Nubra <span className="text-[#6E83FB]">APIs</span>
             </h1>
-            <p className="text-muted-foreground text-sm mb-2">
-              Powerful trading infrastructure for developers
+            <p className="text-base font-semibold text-foreground mb-3 drop-shadow-[0_8px_24px_rgba(110,131,251,0.25)]">
+              Powering <span className="text-[#6E83FB]">Serious</span> Trading Infrastructure
             </p>
-            <p className="text-muted-foreground/60 text-xs max-w-xs mx-auto">
-              Build, automate, and scale trading systems with institutional-grade APIs
+            <p className="text-sm text-muted-foreground">
+              Low‑latency trading, institutional market data, and reliable execution APIs.
             </p>
           </div>
 
-          {/* Stacked Assets */}
-          <div className="flex flex-col items-center gap-10 w-full max-w-xs">
-            {/* Python REST */}
-            <div className="flex flex-col items-center">
-              <span className={`text-[10px] font-medium mb-2 transition-opacity duration-150 ${
-                activeAsset === "pythonRest" ? "text-muted-foreground" : "text-muted-foreground/50"
-              }`}>
-                Python/REST
-              </span>
-              <APIAsset
-                image={PythonRESTBG}
-                alt="Python REST APIs"
-                info={apiData.pythonRest}
-                position="center"
-                isActive={activeAsset === "pythonRest"}
-                onActivate={() => handleActivate("pythonRest")}
-                onDeactivate={handleDeactivate}
-                hasActiveAsset={activeAsset !== null}
-                enableScrollActivation={hasScrolled}
-                onScrollActivate={handleScrollActivate}
-                className="w-full max-w-[180px]"
-              />
-            </div>
+          {/* CTAs */}
+          <div className="flex flex-col gap-3 w-full max-w-xs">
+              <a
+                href="https://nubra.io/"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-[0_12px_30px_hsl(245_82%_67%/0.35)]"
+              >
+                Start building
+              </a>
+              <a
+                href="/products/api/docs/"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 py-3 text-sm font-semibold text-foreground/90"
+              >
+                View documentation
+              </a>
+          </div>
 
-            {/* Trading */}
-            <div className="flex flex-col items-center">
-              <span className={`text-[10px] font-medium mb-2 transition-opacity duration-150 ${
-                activeAsset === "trading" ? "text-muted-foreground" : "text-muted-foreground/50"
-              }`}>
-                Trading APIs
-              </span>
-              <APIAsset
-                image={TradingAPIBG}
-                alt="Trading APIs"
-                info={apiData.trading}
-                position="center"
-                isActive={activeAsset === "trading"}
-                onActivate={() => handleActivate("trading")}
-                onDeactivate={handleDeactivate}
-                hasActiveAsset={activeAsset !== null}
-                enableScrollActivation={hasScrolled}
-                onScrollActivate={handleScrollActivate}
-                className="w-full max-w-[200px]"
-              />
+          {/* Stats */}
+          <div className="mt-8 w-full max-w-xs text-left">
+            <div className="flex flex-col gap-3 text-sm text-foreground/90">
+              <div className="flex flex-col gap-1">
+                <span className="font-semibold">5,000+ instruments</span>
+                <span className="text-xs text-muted-foreground">Realtime stream</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="font-semibold">&lt;20ms</span>
+                <span className="text-xs text-muted-foreground">Order latency</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="font-semibold">Free access</span>
+                <span className="text-xs text-muted-foreground">Trading + market data APIs</span>
+              </div>
             </div>
-
-            {/* Market Data */}
-            <div className="flex flex-col items-center">
-              <span className={`text-[10px] font-medium mb-2 transition-opacity duration-150 ${
-                activeAsset === "marketData" ? "text-muted-foreground" : "text-muted-foreground/50"
-              }`}>
-                Market Data APIs
-              </span>
-              <APIAsset
-                image={MarketDataAPIBG}
-                alt="Market Data APIs"
-                info={apiData.marketData}
-                position="center"
-                isActive={activeAsset === "marketData"}
-                onActivate={() => handleActivate("marketData")}
-                onDeactivate={handleDeactivate}
-                hasActiveAsset={activeAsset !== null}
-                enableScrollActivation={hasScrolled}
-                onScrollActivate={handleScrollActivate}
-                className="w-full max-w-[200px]"
-              />
+            <div className="mt-3 text-[11px] uppercase tracking-[0.24em] text-muted-foreground/70">
+              And more capabilities built in
             </div>
+          </div>
 
-            {/* Portfolio */}
-            <div className="flex flex-col items-center">
-              <span className={`text-[10px] font-medium mb-2 transition-opacity duration-150 ${
-                activeAsset === "portfolio" ? "text-muted-foreground" : "text-muted-foreground/50"
-              }`}>
-                Portfolio APIs
-              </span>
-              <APIAsset
-                image={PortfolioAPIBG}
-                alt="Portfolio APIs"
-                info={apiData.portfolio}
-                position="center"
-                isActive={activeAsset === "portfolio"}
-                onActivate={() => handleActivate("portfolio")}
-                onDeactivate={handleDeactivate}
-                hasActiveAsset={activeAsset !== null}
-                enableScrollActivation={hasScrolled}
-                onScrollActivate={handleScrollActivate}
-                className="w-full max-w-[220px]"
+          {/* Visual */}
+          <div className="mt-8 flex justify-center">
+            <div className="relative w-[240px]">
+              <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[11px] uppercase tracking-[0.24em] text-muted-foreground/70">
+                {heroImages[activeHeroImage].alt}
+              </div>
+              <button
+                type="button"
+                onClick={showPrev}
+                aria-label="Previous image"
+                className="absolute -left-8 top-1/2 -translate-y-1/2 h-9 w-9 text-white/80 transition-colors hover:text-white"
+              >
+                <svg viewBox="0 0 24 24" className="mx-auto h-7 w-7">
+                  <path d="M15.5 6.5l-7 5.5 7 5.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={showNext}
+                aria-label="Next image"
+                className="absolute -right-8 top-1/2 -translate-y-1/2 h-9 w-9 text-white/80 transition-colors hover:text-white"
+              >
+                <svg viewBox="0 0 24 24" className="mx-auto h-7 w-7">
+                  <path d="M8.5 6.5l7 5.5-7 5.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <img
+                src={heroImages[activeHeroImage].src}
+                alt={heroImages[activeHeroImage].alt}
+                className="w-[220px] object-contain drop-shadow-[0_18px_40px_hsl(225_40%_45%/0.35)]"
+                draggable={false}
               />
-            </div>
-
-            {/* Nubra Logo */}
-            <div className="mt-4">
-              <APIAsset
-                image={NubraLogoBG}
-                alt="Nubra Logo"
-                info={apiData.nubraLogo}
-                position="top"
-                isActive={activeAsset === "nubraLogo"}
-                onActivate={() => handleActivate("nubraLogo")}
-                onDeactivate={handleDeactivate}
-                hasActiveAsset={activeAsset !== null}
-                isLogo={true}
-                enableScrollActivation={hasScrolled}
-                onScrollActivate={handleScrollActivate}
-                className="w-[80px]"
-              />
+              {heroImages[activeHeroImage].caption && (
+                <div className="mt-3 text-center text-[11px] leading-[1.35] text-muted-foreground/75">
+                  {heroImages[activeHeroImage].caption?.map((line) => (
+                    <div key={line}>{line}</div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -246,140 +159,112 @@ export const HeroSection = () => {
 
   return (
     <section 
-      className="relative min-h-screen flex flex-col items-center justify-center pt-32 pb-20"
-      onClick={handleOutsideClick}
+      className="relative min-h-screen flex items-center pt-32 pb-20"
     >
 
       {/* Main content container */}
-      <div className="relative z-10 w-full max-w-5xl mx-auto px-6">
-        {/* Hero Text */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-3 tracking-tight">
-            Nubra <span className="text-[#6E83FB]">APIs</span>
-          </h1>
-          <p className="text-sm md:text-base text-muted-foreground mb-2">
-            Powerful trading infrastructure for developers
-          </p>
-          <p className="text-xs md:text-sm text-muted-foreground/50 max-w-md mx-auto">
-            Build, automate, and scale trading systems with institutional-grade APIs
-          </p>
-        </div>
+      <div className="relative z-10 w-full max-w-6xl mx-auto px-6">
+        <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr] items-center">
+          {/* Hero Text */}
+          <div>
+            <h1 className="w-full text-center text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-3 tracking-tight translate-x-1/2">
+              Nubra <span className="text-[#6E83FB]">APIs</span>
+            </h1>
+            <p className="text-lg md:text-xl font-semibold text-foreground mb-4 drop-shadow-[0_10px_28px_rgba(110,131,251,0.25)] text-center translate-x-1/2">
+              Powering <span className="text-[#6E83FB]">Serious</span> Trading Infrastructure
+            </p>
+            <div className="text-base md:text-lg text-muted-foreground max-w-xl space-y-2 translate-y-[35%]">
+              <p>
+                Connect to low‑latency execution, institutional market data, and robust
+                portfolio systems
+              </p>
+            </div>
 
-        {/* Portfolio API - centered above, secondary */}
-        <div className="flex flex-col items-center mb-6">
-          <span 
-            className={`text-[10px] font-medium mb-2 transition-opacity duration-150 ease-out ${
-              activeAsset === "portfolio" ? "text-muted-foreground" : "text-muted-foreground/50"
-            } ${activeAsset && activeAsset !== "portfolio" ? "opacity-40" : ""}`}
-          >
-            Portfolio APIs
-          </span>
-          <APIAsset
-            image={PortfolioAPIBG}
-            alt="Portfolio APIs"
-            info={apiData.portfolio}
-            position="back"
-            isActive={activeAsset === "portfolio"}
-            onActivate={() => handleActivate("portfolio")}
-            onDeactivate={handleDeactivate}
-            hasActiveAsset={activeAsset !== null}
-            enableScrollActivation={hasScrolled}
-            onScrollActivate={handleScrollActivate}
-            className="w-[195px] md:w-[235px] lg:w-[275px] opacity-60"
-          />
-        </div>
+            {/* CTAs */}
+            <div className="mt-8 flex flex-wrap gap-4 translate-y-[35%]">
+              <a
+                href="https://nubra.io/"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center rounded-full bg-primary px-7 py-3 text-sm font-semibold text-primary-foreground shadow-[0_14px_36px_hsl(245_82%_67%/0.35)]"
+              >
+                Start building
+              </a>
+              <a
+                href="/products/api/docs/"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-7 py-3 text-sm font-semibold text-foreground/90"
+              >
+                View documentation
+              </a>
+            </div>
 
-        {/* API Belt - Horizontal axis */}
-        <div className="relative flex items-center justify-center gap-8 md:gap-12 lg:gap-16">
-          {/* Left - Trading API */}
-          <div className="flex flex-col items-center flex-shrink-0">
-            <span 
-              className={`text-[10px] font-medium mb-2 transition-opacity duration-150 ease-out ${
-                activeAsset === "trading" ? "text-muted-foreground" : "text-muted-foreground/50"
-              } ${activeAsset && activeAsset !== "trading" ? "opacity-40" : ""}`}
-            >
-              Trading APIs
-            </span>
-            <APIAsset
-              image={TradingAPIBG}
-              alt="Trading APIs"
-              info={apiData.trading}
-              position="left"
-              isActive={activeAsset === "trading"}
-              onActivate={() => handleActivate("trading")}
-              onDeactivate={handleDeactivate}
-              hasActiveAsset={activeAsset !== null}
-              enableScrollActivation={hasScrolled}
-              onScrollActivate={handleScrollActivate}
-              className="w-[240px] md:w-[300px] lg:w-[360px]"
-            />
+            {/* Stats */}
+            <div className="mt-6 max-w-xl translate-y-[35%]">
+              <div className="flex flex-col gap-4 text-base text-foreground/90">
+                <div className="flex flex-col gap-1">
+                  <span className="font-semibold">5,000+ instruments</span>
+                  <span className="text-sm text-muted-foreground">Realtime stream</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="font-semibold">&lt;20ms</span>
+                  <span className="text-sm text-muted-foreground">Order latency</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="font-semibold">Free access</span>
+                  <span className="text-sm text-muted-foreground">Trading + market data APIs</span>
+                </div>
+              </div>
+              <div className="mt-4 text-xs uppercase tracking-[0.24em] text-muted-foreground/70">
+                And more capabilities built in
+              </div>
+            </div>
           </div>
 
-          {/* Center - Python REST */}
-          <div className="flex flex-col items-center flex-shrink-0">
-            <span 
-              className={`text-[10px] font-medium mb-2 transition-opacity duration-150 ease-out ${
-                activeAsset === "pythonRest" ? "text-muted-foreground" : "text-muted-foreground/50"
-              } ${activeAsset && activeAsset !== "pythonRest" ? "opacity-40" : ""}`}
-            >
-              Python/REST
-            </span>
-            <APIAsset
-              image={PythonRESTBG}
-              alt="Python REST APIs"
-              info={apiData.pythonRest}
-              position="center"
-              isActive={activeAsset === "pythonRest"}
-              onActivate={() => handleActivate("pythonRest")}
-              onDeactivate={handleDeactivate}
-              hasActiveAsset={activeAsset !== null}
-              enableScrollActivation={hasScrolled}
-              onScrollActivate={handleScrollActivate}
-              className="w-[180px] md:w-[225px] lg:w-[255px]"
-            />
+          {/* Hero Visual */}
+          <div className="relative flex justify-center lg:justify-end translate-y-[35%]">
+            <div className="absolute -top-8 right-6 h-40 w-40 rounded-full bg-[#6E83FB]/15 blur-[70px]" />
+            <div className="absolute -bottom-10 right-0 h-48 w-48 rounded-full bg-[#59D3FF]/10 blur-[80px]" />
+            <div className="relative">
+              <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-xs uppercase tracking-[0.24em] text-muted-foreground/70">
+                {heroImages[activeHeroImage].alt}
+              </div>
+              <button
+                type="button"
+                onClick={showPrev}
+                aria-label="Previous image"
+                className="absolute -left-10 top-1/2 -translate-y-1/2 h-10 w-10 text-white/80 transition-colors hover:text-white"
+              >
+                <svg viewBox="0 0 24 24" className="mx-auto h-8 w-8">
+                  <path d="M15.5 6.5l-7 5.5 7 5.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={showNext}
+                aria-label="Next image"
+                className="absolute -right-10 top-1/2 -translate-y-1/2 h-10 w-10 text-white/80 transition-colors hover:text-white"
+              >
+                <svg viewBox="0 0 24 24" className="mx-auto h-8 w-8">
+                  <path d="M8.5 6.5l7 5.5-7 5.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <img
+                src={heroImages[activeHeroImage].src}
+                alt={heroImages[activeHeroImage].alt}
+                className="w-[280px] md:w-[340px] lg:w-[420px] object-contain drop-shadow-[0_24px_60px_hsl(225_40%_45%/0.45)]"
+                draggable={false}
+              />
+              {heroImages[activeHeroImage].caption && (
+                <div className="mt-4 text-center text-xs leading-[1.4] text-muted-foreground/75">
+                  {heroImages[activeHeroImage].caption?.map((line) => (
+                    <div key={line}>{line}</div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-
-          {/* Right - Market Data API */}
-          <div className="flex flex-col items-center flex-shrink-0">
-            <span 
-              className={`text-[10px] font-medium mb-2 transition-opacity duration-150 ease-out ${
-                activeAsset === "marketData" ? "text-muted-foreground" : "text-muted-foreground/50"
-              } ${activeAsset && activeAsset !== "marketData" ? "opacity-40" : ""}`}
-            >
-              Market Data APIs
-            </span>
-            <APIAsset
-              image={MarketDataAPIBG}
-              alt="Market Data APIs"
-              info={apiData.marketData}
-              position="right"
-              isActive={activeAsset === "marketData"}
-              onActivate={() => handleActivate("marketData")}
-              onDeactivate={handleDeactivate}
-              hasActiveAsset={activeAsset !== null}
-              enableScrollActivation={hasScrolled}
-              onScrollActivate={handleScrollActivate}
-              className="w-[240px] md:w-[300px] lg:w-[360px]"
-            />
-          </div>
-        </div>
-
-        {/* Nubra Logo - Foundation layer, 2x size */}
-        <div className="flex justify-center mt-10">
-          <APIAsset
-            image={NubraLogoBG}
-            alt="Nubra Logo"
-            info={apiData.nubraLogo}
-            position="top"
-            isActive={activeAsset === "nubraLogo"}
-            onActivate={() => handleActivate("nubraLogo")}
-            onDeactivate={handleDeactivate}
-            hasActiveAsset={activeAsset !== null}
-            isLogo={true}
-            enableScrollActivation={hasScrolled}
-            onScrollActivate={handleScrollActivate}
-            className="w-[231px] md:w-[273px] lg:w-[315px]"
-          />
         </div>
       </div>
     </section>

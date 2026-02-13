@@ -13,6 +13,7 @@ import nubraLogo from "@/assets/Nubra Logo.png";
 const developerItems = [
   { label: "API Docs", href: "/products/api/docs/", isExternal: true },
   { label: "Use Case", href: "/use-cases" },
+  { label: "NubraAI", href: "https://chatbase.co/CafXmTi_cnvWzagxfBe4_/help", isExternal: true },
 ];
 
 const communityItems = [

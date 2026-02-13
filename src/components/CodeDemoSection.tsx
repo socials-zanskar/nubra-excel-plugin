@@ -18,6 +18,7 @@ export const CodeDemoSection = () => {
   const playingRef = useRef(false);
   const indexRef = useRef(0);
   const lastTimeRef = useRef(0);
+  const loopTimeoutRef = useRef<number | null>(null);
 
   const codeLines: CodeToken[][] = useMemo(
     () => [
@@ -195,6 +196,10 @@ export const CodeDemoSection = () => {
     const clearTimeouts = () => {
       timeoutsRef.current.forEach((id) => window.clearTimeout(id));
       timeoutsRef.current = [];
+      if (loopTimeoutRef.current) {
+        window.clearTimeout(loopTimeoutRef.current);
+        loopTimeoutRef.current = null;
+      }
     };
 
     const setTimeoutSafe = (fn: () => void, ms: number) => {
@@ -313,6 +318,9 @@ export const CodeDemoSection = () => {
           if (indexRef.current >= streamRef.current.length) {
             playingRef.current = false;
             renderCaret();
+            loopTimeoutRef.current = window.setTimeout(() => {
+              runFromStart();
+            }, 4000);
             return;
           }
           const item = streamRef.current[indexRef.current];
@@ -329,9 +337,7 @@ export const CodeDemoSection = () => {
       rafRef.current = requestAnimationFrame(tick);
     };
 
-    const startAnimation = () => {
-      if (startedRef.current) return;
-      startedRef.current = true;
+    const runFromStart = () => {
       codeEl.innerHTML = "";
       hideDropdown();
       indexRef.current = 0;
@@ -339,6 +345,12 @@ export const CodeDemoSection = () => {
       playingRef.current = true;
       renderCaret();
       rafRef.current = requestAnimationFrame(tick);
+    };
+
+    const startAnimation = () => {
+      if (startedRef.current) return;
+      startedRef.current = true;
+      runFromStart();
     };
 
     const observer = new IntersectionObserver(

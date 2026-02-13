@@ -9,19 +9,6 @@
 </title>
 {% endblock %}
 
-{# =========================
-   HEADER LINK (BELOW SEARCH)
-   ========================= #}
-{% block header %}
-  {{
-    super()
-    | replace(
-        '</header>',
-        '<a class="md-header__github-below-search" href="https://github.com/NubraAPI" target="_blank" rel="noopener" title="NubraAPI on GitHub" aria-label="NubraAPI on GitHub"><span class="md-icon">{% include ".icons/fontawesome/brands/github.svg" %}</span></a></header>'
-      )
-  }}
-{% endblock %}
-
 {% block scripts %}
   {{ super() }}
 
@@ -93,5 +80,16 @@
         }
       } catch (e) {}
     }, 800);
+  </script>
+
+  <!-- Open NubraAI tab link in a new browser tab -->
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const link = document.querySelector('.md-tabs__link[href="https://chatbase.co/CafXmTi_cnvWzagxfBe4_/help"]');
+      if (link) {
+        link.setAttribute("target", "_blank");
+        link.setAttribute("rel", "noopener");
+      }
+    });
   </script>
 {% endblock %}

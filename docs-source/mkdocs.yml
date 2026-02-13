@@ -2,7 +2,8 @@ site_name: API Documentation
 site_description: Documentation for Nubra APIs and Client SDKs or Libraries
 site_author: Nubra
 site_url: https://nubra.io/products/api/docs
- #repo_url: https://github.com/NubraAPI
+repo_url: https://github.com/NubraAPI
+repo_name: NubraAPI
 use_directory_urls: false
 copyright: Copyright © 2025 Zanskar Securities Private Limited. All rights reserved.
 
@@ -38,8 +39,8 @@ theme:
   font:
     text: Roboto
     code: Roboto Mono
-  #icon:
-  #  repo: fontawesome/brands/github
+  icon:
+    repo: fontawesome/brands/github
   logo: assets/logo.avif
 
 extra_css:
@@ -207,6 +208,7 @@ nav:
   # =========================
   - Guides & Examples:
       - Overview: guides/index.md
+  - NubraAI: https://chatbase.co/CafXmTi_cnvWzagxfBe4_/help
 
 markdown_extensions:
   - attr_list

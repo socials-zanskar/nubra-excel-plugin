@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { ArrowRight, Check } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
+import MarketDataAPIBG from "@/assets/MarketDataAPIBG.png";
 
 const features = [
   {
@@ -54,7 +55,7 @@ export const PricingSection = () => {
         >
           <GlassCard className="relative overflow-hidden p-8 md:p-10 ring-1 ring-[#6E83FB]/20 shadow-[0_10px_30px_hsl(245_82%_67%/0.15),0_4px_16px_hsl(0_0%_0%/0.35)] transition-all duration-300 ease-out hover:-translate-y-1 hover:ring-[#6E83FB]/35 hover:shadow-[0_18px_40px_hsl(245_82%_67%/0.18),0_6px_20px_hsl(0_0%_0%/0.45),0_0_24px_hsl(245_82%_67%/0.28)]">
             <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-[#6E83FB]/10 via-transparent to-[#59D3FF]/10" />
-            <div className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
+            <div className="flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
               <div className="md:max-w-lg">
                 <div className="inline-flex items-center rounded-full border border-[#6E83FB]/40 bg-[#6E83FB]/15 px-3 py-1 text-xs font-semibold tracking-wide text-[#A9B6FF] shadow-[0_0_20px_hsl(232_92%_72%/0.25)]">
                   Single access tier
@@ -84,13 +85,16 @@ export const PricingSection = () => {
                 </ul>
               </div>
 
-              <div className="shrink-0 text-center md:text-right">
-                <div className="text-5xl md:text-6xl font-bold text-foreground">
-                  Rs <span className="text-[#6E83FB]">0</span>
+              <div className="shrink-0 flex flex-col items-center md:items-end gap-2 md:self-start">
+                <div className="text-2xl md:text-3xl font-semibold text-foreground">
+                  <span className="text-[#6E83FB]">Free</span> Access
                 </div>
-                <div className="text-sm text-muted-foreground mt-1">per month + taxes</div>
-                <div className="text-xs text-muted-foreground/70 mt-3">
-                  Terms and fair-use limits apply
+                <div className="md:self-center md:translate-y-[40%]">
+                  <img
+                    src={MarketDataAPIBG}
+                    alt="Market Data APIs"
+                    className="w-[260px] md:w-[310px] lg:w-[360px] object-contain drop-shadow-[0_16px_40px_hsl(225_40%_45%/0.35)]"
+                  />
                 </div>
               </div>
             </div>

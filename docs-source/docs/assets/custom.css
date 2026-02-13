@@ -36,43 +36,45 @@
     color: rgba(255, 255, 255, 0.7);
 }
 
-/* GitHub icon below search (absolute; no layout shift) */
-.md-header {
-    position: relative;
-}
-
-.md-header__github-below-search {
-    position: absolute;
-    top: calc(var(--md-header-height) - 0.2rem);
-    left: 12.75rem; /* aligns under search on desktop */
-    transform: translateY(-50%);
-    width: 2rem;
-    height: 2rem;
+/* GitHub icon to the right of "API Documentation" title */
+.md-header__title {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    border-radius: 999px;
-    color: #ffffff;
-    text-decoration: none;
-    z-index: 5;
+    gap: 0.35rem;
 }
 
-.md-header__github-below-search:hover {
-    background: rgba(255, 255, 255, 0.12);
+/* Push header utilities to the right end */
+.md-header__inner {
+    justify-content: flex-start;
+    max-width: 100%;
 }
 
-.md-header__github-below-search .md-icon svg {
+.md-search,
+.md-header__option,
+.md-header__source {
+    margin-left: 0.5rem;
+}
+
+.md-search {
+    margin-left: auto;
+}
+
+.md-header__source {
+    margin-left: 0.25rem;
+}
+
+.md-header__source .md-source {
+    padding: 0;
+}
+
+.md-header__source .md-source__repository {
+    display: none;
+}
+
+.md-header__source .md-icon svg {
     width: 1.1rem;
     height: 1.1rem;
     fill: currentColor;
-}
-
-@media (max-width: 600px) {
-    .md-header__github-below-search {
-        left: 8.75rem;
-        width: 1.75rem;
-        height: 1.75rem;
-    }
 }
 
 /* Light mode search styling */
@@ -154,6 +156,117 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* === CHATBASE FULL PAGE === */
+.chatbase-hero {
+  margin: 1.5rem 0 2.5rem;
+  padding: 2.5rem 2rem;
+  border-radius: 20px;
+  background: radial-gradient(circle at top left, rgba(26, 35, 126, 0.14), transparent 55%),
+              linear-gradient(135deg, rgba(13, 71, 161, 0.08), rgba(13, 71, 161, 0.02));
+  border: 1px solid rgba(13, 71, 161, 0.12);
+}
+
+.chatbase-hero__content h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.7rem;
+}
+
+.chatbase-hero__content p {
+  max-width: 720px;
+  margin: 0 0 1.25rem;
+  color: rgba(0, 0, 0, 0.7);
+}
+
+[data-md-color-scheme="slate"] .chatbase-hero__content p {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.chatbase-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.chatbase-embed {
+  min-height: 60vh;
+  border-radius: 22px;
+  border: 1px dashed rgba(13, 71, 161, 0.25);
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(13, 71, 161, 0.04),
+    rgba(13, 71, 161, 0.04) 18px,
+    rgba(13, 71, 161, 0.02) 18px,
+    rgba(13, 71, 161, 0.02) 36px
+  );
+  padding: 2.5rem;
+}
+
+
+.chatbase-embed--live {
+  padding: 0;
+  border: none;
+  background: transparent;
+  min-height: 75vh;
+}
+
+.chatbase-embed--live iframe {
+  width: 100%;
+  height: 75vh;
+  min-height: 700px;
+  border: none;
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+[data-md-color-scheme="slate"] .chatbase-embed--live iframe {
+  background: #0b0b0b;
+}
+
+[data-md-color-scheme="slate"] .chatbase-embed {
+  border-color: rgba(86, 142, 255, 0.35);
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(86, 142, 255, 0.12),
+    rgba(86, 142, 255, 0.12) 18px,
+    rgba(86, 142, 255, 0.06) 18px,
+    rgba(86, 142, 255, 0.06) 36px
+  );
+}
+
+.chatbase-embed__placeholder {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+  max-width: 720px;
+}
+
+.chatbase-embed__badge {
+  display: inline-flex;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(13, 71, 161, 0.12);
+  color: #0d47a1;
+  font-weight: 600;
+}
+
+[data-md-color-scheme="slate"] .chatbase-embed__badge {
+  background: rgba(86, 142, 255, 0.2);
+  color: #c7d9ff;
+}
+
+@media (max-width: 700px) {
+  .chatbase-hero {
+    padding: 2rem 1.5rem;
+  }
+
+  .chatbase-embed {
+    padding: 2rem 1.5rem;
   }
 }
 
