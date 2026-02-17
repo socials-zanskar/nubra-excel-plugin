@@ -243,46 +243,6 @@ map directly to the 4 pillars you just saw above.
         - **DAY** — valid for the trading day
         - **IOC** — executes immediately; unfilled quantity is cancelled
 
-=== "MARKET Order"
-
-    ```python
-    from nubra_python_sdk.start_sdk import InitNubraSdk, NubraEnv
-    from nubra_python_sdk.trading.trading_data import NubraTrader
-    from nubra_python_sdk.refdata.instruments import InstrumentData
-
-    # 1. Initialize Nubra SDK (Use NubraEnv.PROD for live trading)
-    nubra = InitNubraSdk(NubraEnv.UAT)
-    trade = NubraTrader(nubra, version="V2")
-    instruments = InstrumentData(nubra)
-
-    # 2. Get Ref ID of instrument
-    REF_ID = instruments.get_instrument_by_symbol('TCS', exchange='NSE').ref_id
-
-    # 3. Place Order using Market
-    result = trade.create_order({
-        "ref_id": REF_ID,
-        "order_side": "ORDER_SIDE_BUY",
-        "order_type": "ORDER_TYPE_REGULAR",
-        "price_type": "MARKET",
-        "order_qty": 1,
-        "validity_type": "IOC",
-        "order_delivery_type": "ORDER_DELIVERY_TYPE_CNC",
-        "exchange": "NSE",
-        "tag": "Market_example"
-    })
-
-    print(result.order_id)
-    ```
-
-    **Explanation**
-
-    - Uses `price_type = MARKET`
-    - Executes immediately at the best available price
-    - MARKET orders:
-        - **Only support IOC validity**
-        - **Cannot be placed as DAY orders**
-        - Any unfilled quantity is cancelled immediately
-
 === "REGULAR Order"
 
     ```python
