@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nubra Excel Plugin</title>
+    <link rel="stylesheet" href="./taskpane.css" />
+    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  </head>
+  <body>
+    <main class="container">
+      <section class="hero card">
+        <div class="row spread">
+          <div class="brand-row">
+            <img src="./icons/nubra.png" alt="Nubra" class="brand-logo" />
+            <div>
+              <h1 class="title-thin">Nubra Excel Plugin</h1>
+              <span id="activeEnvChip" class="active-env-chip">Active Env: UAT</span>
+            </div>
+          </div>
+          <div class="hero-controls">
+            <div class="hero-env-row">
+              <button id="envUatButton" type="button" class="env-btn compact">
+                <span class="env-name">UAT</span>
+                <span id="envUatAuthTag" class="env-auth bad">No Auth</span>
+              </button>
+              <button id="envLiveButton" type="button" class="env-btn compact">
+                <span class="env-name">PROD</span>
+                <span id="envLiveAuthTag" class="env-auth bad">No Auth</span>
+              </button>
+            </div>
+            <div class="hero-util-row">
+              <button id="topLogoutButton" type="button" class="env-logout-btn hidden secondary">Logout</button>
+              <button id="serverStatusButton" type="button" class="server-status disconnected">Server</button>
+              <button id="settingsToggleButton" type="button" class="icon-btn settings-btn" aria-label="Settings" title="Settings">⋯</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="settingsBody" class="settings-popover hidden top-gap">
+          <label class="inline-checkbox" for="autoSwitchSheetsInput">
+            <input id="autoSwitchSheetsInput" type="checkbox" />
+            Auto-switch to updated WS sheet
+          </label>
+          <label class="inline-checkbox" for="clearOnEnvSwitchInput">
+            <input id="clearOnEnvSwitchInput" type="checkbox" />
+            Clear stream sheets on environment switch
+          </label>
+          <label class="inline-checkbox" for="confirmProdOrderInput">
+            <input id="confirmProdOrderInput" type="checkbox" checked />
+            Confirm before PROD order actions
+          </label>
+          <p class="muted">Device ID: <code id="deviceIdText">-</code></p>
+        </div>
+      </section>
+
+      <section class="card" id="authCard">
+        <div class="row spread">
+          <h2 id="authTitle">Authenticate (UAT)</h2>
+          <span id="authBadge" class="status-pill bad">Not authenticated</span>
+        </div>
+        <div class="grid">
+          <label for="phoneInput">Phone</label>
+          <input id="phoneInput" type="tel" placeholder="10-digit mobile number" />
+          <div id="phoneFieldMsg" class="field-msg hidden" aria-live="polite"></div>
+          <label class="inline-checkbox" for="skipTotpInput">
+            <input id="skipTotpInput" type="checkbox" />
+            Skip TOTP route
+          </label>
+          <button id="sendOtpButton">1) Send OTP</button>
+        </div>
+
+        <div class="grid top-gap" id="otpStage">
+          <label for="otpInput">OTP</label>
+          <input id="otpInput" type="text" placeholder="6-digit OTP" />
+          <div id="otpFieldMsg" class="field-msg hidden" aria-live="polite"></div>
+          <button id="verifyOtpButton">2) Verify OTP</button>
+        </div>
+
+        <div class="grid top-gap hidden" id="mpinStage">
+          <label for="pinInput">MPIN</label>
+          <input id="pinInput" type="password" placeholder="4-digit MPIN" />
+          <div id="pinFieldMsg" class="field-msg hidden" aria-live="polite"></div>
+          <button id="verifyPinButton">3) Verify MPIN (Login)</button>
+        </div>
+
+        <div id="authActionMsg" class="field-msg hidden top-gap" aria-live="polite"></div>
+
+        <div class="row top-gap">
+          <button id="clearSessionButton" class="secondary">Logout Current Env</button>
+          <span id="sessionState" class="status-pill">Not authenticated</span>
+        </div>
+      </section>
+
+      <details class="card collapsible auth-required master-card" id="masterPanel">
+        <summary>
+          <span class="summary-title">
+            <span id="masterWsDot" class="ws-dot ready"></span>
+            Master WebSocket
+            <span id="masterReconnectLabel" class="reconnect-label hidden">Reconnecting...</span>
+          </span>
+          <button id="stopMasterWsButton" class="master-stop-icon" type="button" title="Stop Master WS" aria-label="Stop Master WebSocket">
+            ■
+          </button>
+        </summary>
+        <div class="grid collapsible-body master-body">
+          <p class="muted master-help">Master auto-projects from active Live Prices and Live OC streams.</p>
+          <div id="masterEmptyActions" class="master-empty-actions hidden">
+            <button id="masterQuickStartPricesButton" type="button" class="mini-btn">Start Live Prices</button>
+            <button id="masterQuickStartOcButton" type="button" class="mini-btn secondary">Start Live OC</button>
+          </div>
+          <div class="oc-picker-card">
+            <input id="ocSearchInput" type="search" placeholder="Search active OC..." aria-label="Search active option chains" />
+            <div id="masterOcList" class="master-oc-list" role="listbox" aria-label="Active option chains"></div>
+            <select id="ocViewSelect" class="oc-view-select hidden" title="Active option chain selector">
+              <option value="">OC View: None</option>
+            </select>
+            <datalist id="symbolList"></datalist>
+            <datalist id="indexList"></datalist>
+            <datalist id="stockList"></datalist>
+            <datalist id="optionList"></datalist>
+            <datalist id="optionUnderlyingList"></datalist>
+            <datalist id="expiryList"></datalist>
+          </div>
+        </div>
+      </details>
+
+      <details class="card collapsible auth-required" id="livePricesPanel">
+        <summary>
+          <span class="summary-title">
+            <span id="livePricesWsDot" class="ws-dot ready"></span>
+            Live Prices WebSocket
+            <span id="livePricesReconnectLabel" class="reconnect-label hidden">Reconnecting...</span>
+          </span>
+        </summary>
+        <div class="grid collapsible-body">
+          <label for="livePricesSymbolsInput">Symbols (comma separated)</label>
+          <input id="livePricesSymbolsInput" list="symbolList" placeholder="NIFTY, BANKNIFTY, RELIANCE" />
+
+          <label for="livePricesExchangeSelect">Exchange</label>
+          <select id="livePricesExchangeSelect">
+            <option value="NSE">NSE</option>
+            <option value="BSE">BSE</option>
+          </select>
+
+          <label for="livePricesIntervalSelect">Interval</label>
+          <select id="livePricesIntervalSelect">
+            <option value="1s">1s</option>
+            <option value="5s">5s</option>
+            <option value="10s">10s</option>
+            <option value="30s">30s</option>
+            <option value="1m">1m</option>
+            <option value="5m">5m</option>
+            <option value="10m">10m</option>
+          </select>
+
+          <button id="startLivePricesWsButton">Start Live Prices WS</button>
+          <button id="stopLivePricesWsButton" class="secondary">Stop Live Prices WS</button>
+
+          <details class="active-subscriptions" id="livePricesActivePanel">
+            <summary>Active Live Price Symbols (<span id="livePricesActiveCount">0</span>)</summary>
+            <div id="livePricesActiveList" class="active-list"></div>
+          </details>
+        </div>
+      </details>
+
+      <details class="card collapsible auth-required" id="liveOcPanel">
+        <summary>
+          <span class="summary-title">
+            <span id="liveOcWsDot" class="ws-dot ready"></span>
+            Live Option Chain WebSocket
+            <span id="liveOcReconnectLabel" class="reconnect-label hidden">Reconnecting...</span>
+          </span>
+        </summary>
+        <div class="grid collapsible-body">
+          <label for="liveOcAssetInput">Asset</label>
+          <input id="liveOcAssetInput" list="symbolList" placeholder="NIFTY / BANKNIFTY / RELIANCE" />
+
+          <label for="liveOcExpiryInput">Expiry (YYYYMMDD)</label>
+          <input id="liveOcExpiryInput" list="expiryList" type="text" placeholder="20260326" />
+
+          <label for="liveOcExchangeSelect">Exchange</label>
+          <select id="liveOcExchangeSelect">
+            <option value="NSE">NSE</option>
+            <option value="BSE">BSE</option>
+          </select>
+
+          <label for="liveOcIntervalSelect">Interval</label>
+          <select id="liveOcIntervalSelect">
+            <option value="1s">1s</option>
+            <option value="5s">5s</option>
+            <option value="10s">10s</option>
+            <option value="30s">30s</option>
+            <option value="1m">1m</option>
+            <option value="5m">5m</option>
+            <option value="10m">10m</option>
+          </select>
+
+          <button id="startLiveOcWsButton">Start Live Option Chain WS</button>
+          <button id="stopLiveOcWsButton" class="secondary">Stop Live Option Chain WS</button>
+
+          <details class="active-subscriptions" id="liveOcActivePanel">
+            <summary>Active Live OC Chains (<span id="liveOcActiveCount">0</span>)</summary>
+            <div id="liveOcActiveList" class="active-list"></div>
+          </details>
+        </div>
+      </details>
+
+      <details class="card collapsible auth-required risk-sensitive-card" id="positionsPanel">
+        <summary>
+          <span class="summary-title">Positions (REST)</span>
+        </summary>
+        <div class="grid collapsible-body">
+          <button id="refreshPositionsButton">Build/Refresh Positions Sheet</button>
+        </div>
+      </details>
+
+      <details class="card collapsible auth-required risk-sensitive-card" id="historicalPanel">
+        <summary>
+          <span class="summary-title">Historical Data (REST)</span>
+        </summary>
+        <div class="grid collapsible-body">
+          <label for="historicalSymbolInput">Stock/Index/Option</label>
+          <input id="historicalSymbolInput" list="symbolList" placeholder="NIFTY / RELIANCE" />
+          <label for="historicalTypeSelect">Type</label>
+          <select id="historicalTypeSelect">
+            <option value="STOCK">STOCK</option>
+            <option value="INDEX">INDEX</option>
+            <option value="OPT">OPT</option>
+          </select>
+          <label for="historicalExchangeSelect">Exchange</label>
+          <select id="historicalExchangeSelect">
+            <option value="NSE">NSE</option>
+            <option value="BSE">BSE</option>
+          </select>
+          <label for="historicalStartDateInput">Start Date</label>
+          <input id="historicalStartDateInput" type="date" />
+          <label for="historicalEndDateInput">End Date</label>
+          <input id="historicalEndDateInput" type="date" />
+          <label for="historicalIntervalSelect">Interval</label>
+          <select id="historicalIntervalSelect">
+            <option value="1s">1s</option>
+            <option value="1m">1m</option>
+            <option value="2m">2m</option>
+            <option value="3m">3m</option>
+            <option value="5m">5m</option>
+            <option value="15m">15m</option>
+            <option value="30m">30m</option>
+            <option value="1h">1h</option>
+            <option value="1d">1d</option>
+            <option value="1w">1w</option>
+            <option value="1mt">1mt</option>
+          </select>
+          <button id="buildHistoricalButton">Build Historical Sheet + Chart</button>
+        </div>
+      </details>
+
+      <section class="card">
+        <h2>Status Log</h2>
+        <pre id="statusLog">Ready.</pre>
+      </section>
+      <section class="card">
+        <h2>Telemetry</h2>
+        <pre id="telemetryLog">Telemetry ready.</pre>
+      </section>
+    </main>
+    <div id="workspaceLoader" class="workspace-loader hidden" aria-live="polite" aria-busy="true">
+      <div class="workspace-loader-card">
+        <div class="loader-spinner" aria-hidden="true"></div>
+        <div id="workspaceLoaderText" class="loader-text">Loading workspace...</div>
+      </div>
+    </div>
+
+    <script src="./taskpane.js?v=20260226-prod-otpfix1"></script>
+  </body>
+</html>
