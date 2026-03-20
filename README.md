@@ -1,5 +1,8 @@
 # Nubra Excel Plugin
 
+## Version
+Current version: `1.0.0`
+
 ## Purpose
 The Nubra Excel Plugin is a Microsoft Excel Office Add-in developed on behalf of Nubra to provide authenticated market access and live trading data directly inside Excel.
 
