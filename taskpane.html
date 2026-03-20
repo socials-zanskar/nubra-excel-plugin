@@ -1,25 +1,25 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nubra Excel Plugin</title>
-    <link rel="stylesheet" href="./taskpane.css" />
+    <link rel="stylesheet" href="./taskpane.css?v=20260318-placeorder-refresh21" />
     <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
   </head>
   <body>
     <main class="container">
-      <section class="hero card">
-        <div class="row spread">
-          <div class="brand-row">
+      <section class="hero command-bar">
+        <div class="command-bar-main">
+          <div class="brand-row command-brand">
             <img src="./icons/nubra.png" alt="Nubra" class="brand-logo" />
             <div>
               <h1 class="title-thin">Nubra Excel Plugin</h1>
-              <span id="activeEnvChip" class="active-env-chip">Active Env: UAT</span>
+              <div id="activeEnvChip" class="active-env-chip">Data: PROD | Orders: UAT</div>
             </div>
           </div>
-          <div class="hero-controls">
-            <div class="hero-env-row">
+          <div class="hero-controls command-actions">
+            <div class="hero-env-row command-env">
               <button id="envUatButton" type="button" class="env-btn compact">
                 <span class="env-name">UAT</span>
                 <span id="envUatAuthTag" class="env-auth bad">No Auth</span>
@@ -29,12 +29,16 @@
                 <span id="envLiveAuthTag" class="env-auth bad">No Auth</span>
               </button>
             </div>
-            <div class="hero-util-row">
-              <button id="topLogoutButton" type="button" class="env-logout-btn hidden secondary">Logout</button>
+            <div class="hero-util-row command-utils">
+              <button id="topLogoutButton" type="button" class="env-logout-btn secondary">Logout Current Env</button>
               <button id="serverStatusButton" type="button" class="server-status disconnected">Server</button>
-              <button id="settingsToggleButton" type="button" class="icon-btn settings-btn" aria-label="Settings" title="Settings">⋯</button>
+              <button id="settingsToggleButton" type="button" class="icon-btn settings-btn" aria-label="Settings" title="Settings">&#8942;</button>
             </div>
           </div>
+        </div>
+
+        <div class="launch-scope-banner" role="note" aria-live="polite">
+          Beta scope: live real-time data and historical fetch run on PROD. All order actions stay UAT-only.
         </div>
 
         <div id="settingsBody" class="settings-popover hidden top-gap">
@@ -46,15 +50,23 @@
             <input id="clearOnEnvSwitchInput" type="checkbox" />
             Clear stream sheets on environment switch
           </label>
-          <label class="inline-checkbox" for="confirmProdOrderInput">
-            <input id="confirmProdOrderInput" type="checkbox" checked />
-            Confirm before PROD order actions
-          </label>
+          <p class="settings-note">LIVE/PROD order routes are disabled in this beta. The Orders page supports UAT only.</p>
           <p class="muted">Device ID: <code id="deviceIdText">-</code></p>
         </div>
       </section>
 
-      <section class="card" id="authCard">
+      <section class="page-nav command-nav">
+        <div class="page-nav-strip" role="tablist" aria-label="Workspace pages">
+          <button id="masterPageButton" type="button" class="page-tab nav-item active" aria-selected="true">Master</button>
+          <button id="realtimePageButton" type="button" class="page-tab nav-item" aria-selected="false">Real Time Data</button>
+          <button id="historicalPageButton" type="button" class="page-tab nav-item" aria-selected="false">Historical Data</button>
+          <button id="ordersPageButton" type="button" class="page-tab nav-item" aria-selected="false">Orders (UAT)</button>
+        </div>
+      </section>
+
+      <section id="workspacePage" class="page-view" data-page="workspace">
+
+      <section class="card" id="authCard" data-page-group="master">
         <div class="row spread">
           <h2 id="authTitle">Authenticate (UAT)</h2>
           <span id="authBadge" class="status-pill bad">Not authenticated</span>
@@ -92,7 +104,7 @@
         </div>
       </section>
 
-      <details class="card collapsible auth-required master-card" id="masterPanel">
+      <details class="card collapsible auth-required master-card" id="masterPanel" data-page-group="master">
         <summary>
           <span class="summary-title">
             <span id="masterWsDot" class="ws-dot ready"></span>
@@ -100,7 +112,7 @@
             <span id="masterReconnectLabel" class="reconnect-label hidden">Reconnecting...</span>
           </span>
           <button id="stopMasterWsButton" class="master-stop-icon" type="button" title="Stop Master WS" aria-label="Stop Master WebSocket">
-            ■
+            &#9632;
           </button>
         </summary>
         <div class="grid collapsible-body master-body">
@@ -125,7 +137,7 @@
         </div>
       </details>
 
-      <details class="card collapsible auth-required" id="livePricesPanel">
+      <details class="card collapsible auth-required" id="livePricesPanel" data-page-group="realtime">
         <summary>
           <span class="summary-title">
             <span id="livePricesWsDot" class="ws-dot ready"></span>
@@ -164,7 +176,7 @@
         </div>
       </details>
 
-      <details class="card collapsible auth-required" id="liveOcPanel">
+      <details class="card collapsible auth-required" id="liveOcPanel" data-page-group="realtime">
         <summary>
           <span class="summary-title">
             <span id="liveOcWsDot" class="ws-dot ready"></span>
@@ -206,7 +218,7 @@
         </div>
       </details>
 
-      <details class="card collapsible auth-required risk-sensitive-card" id="positionsPanel">
+      <details class="card collapsible auth-required risk-sensitive-card" id="positionsPanel" data-page-group="master">
         <summary>
           <span class="summary-title">Positions (REST)</span>
         </summary>
@@ -215,7 +227,7 @@
         </div>
       </details>
 
-      <details class="card collapsible auth-required risk-sensitive-card" id="historicalPanel">
+      <details class="card collapsible auth-required risk-sensitive-card" id="historicalPanel" data-page-group="historical">
         <summary>
           <span class="summary-title">Historical Data (REST)</span>
         </summary>
@@ -255,13 +267,396 @@
         </div>
       </details>
 
-      <section class="card">
+      <section class="card" data-page-group="master">
         <h2>Status Log</h2>
         <pre id="statusLog">Ready.</pre>
       </section>
-      <section class="card">
+      <section class="card" data-page-group="master">
         <h2>Telemetry</h2>
         <pre id="telemetryLog">Telemetry ready.</pre>
+      </section>
+      </section>
+
+      <section id="orderStrategyPage" class="page-view hidden" data-page="order_strategy">
+        <section class="card strategy-hero-card">
+          <div id="ordersAuthPopup" class="orders-auth-popup hidden" role="status" aria-live="polite">
+            <span id="ordersAuthPopupText">Orders are UAT-only. Please login to UAT from this page.</span>
+            <button id="ordersAuthPopupClose" type="button" class="orders-auth-popup-close" aria-label="Dismiss UAT login popup">&times;</button>
+          </div>
+          <div class="row spread">
+            <div>
+              <h2>UAT Trading Workspace</h2>
+              <p class="caption">Single orders, flexi strategy deploy, and live trade tracking.</p>
+            </div>
+            <span class="status-pill">UAT Only</span>
+          </div>
+          <div class="strategy-phase-banner">
+            Flexi strategy builder with delta-based selection and clean order controls for UAT.
+          </div>
+          <div id="uatOnlyNotice" class="strategy-live-lock hidden top-gap">
+            Trading actions are locked because active environment is PROD. Switch to UAT to place or manage orders in this route.
+          </div>
+          <div class="strategy-route-nav top-gap">
+            <a href="#marketOrderCard" class="mini-nav-chip">Single Order</a>
+            <a href="#strategyPreviewCard" class="mini-nav-chip">Flexi Builder</a>
+            <a href="#activeStrategiesCard" class="mini-nav-chip">Current</a>
+            <a href="#completedTradesCard" class="mini-nav-chip">Completed</a>
+            <button id="resetActiveStrategyButton" type="button" class="mini-nav-chip mini-nav-action">Start New Strategy</button>
+          </div>
+        </section>
+
+        <section id="marketOrderCard" class="card risk-sensitive-card">
+          <div class="row spread">
+            <div>
+              <h2>Single LTP Buffer Order</h2>
+              <p class="caption">Symbol-led limit order entry using live LTP with an automatic buffer.</p>
+            </div>
+            <span id="marketOrderEnvChip" class="active-env-chip">Env: UAT</span>
+          </div>
+          <div class="grid top-gap">
+            <label for="marketOrderSymbolInput">Symbol / Asset</label>
+            <input id="marketOrderSymbolInput" list="symbolList" type="text" placeholder="RELIANCE / IDEA / NIFTY" />
+
+            <label for="marketOrderExchangeSelect">Exchange</label>
+            <select id="marketOrderExchangeSelect">
+              <option value="NSE">NSE</option>
+              <option value="BSE">BSE</option>
+            </select>
+
+            <div class="hidden" aria-hidden="true">
+              <label for="marketOrderRefIdInput">Ref ID</label>
+              <input id="marketOrderRefIdInput" type="number" min="1" step="1" placeholder="1842210" />
+            </div>
+
+            <div class="hidden" aria-hidden="true">
+              <button id="resolveMarketRefButton" type="button" class="secondary">Resolve Ref ID</button>
+            </div>
+
+            <div id="marketOrderResolvedMeta" class="muted">Instrument auto-resolution idle.</div>
+
+            <label for="marketOrderQtyInput">Quantity</label>
+            <input id="marketOrderQtyInput" type="number" min="1" step="1" value="1" />
+
+            <label for="marketOrderSideSelect">Side</label>
+            <select id="marketOrderSideSelect">
+              <option value="ORDER_SIDE_BUY">BUY</option>
+              <option value="ORDER_SIDE_SELL">SELL</option>
+            </select>
+
+            <label for="marketOrderDeliverySelect">Delivery</label>
+            <select id="marketOrderDeliverySelect">
+              <option value="ORDER_DELIVERY_TYPE_CNC">CNC</option>
+              <option value="ORDER_DELIVERY_TYPE_IDAY">IDAY</option>
+            </select>
+            <p class="field-hint-tight">IDAY: intraday only, auto closed before market end.</p>
+
+            <label for="marketOrderValiditySelect">Validity</label>
+            <select id="marketOrderValiditySelect">
+              <option value="DAY">DAY</option>
+              <option value="IOC">IOC</option>
+            </select>
+            <p class="field-hint-tight">IOC: execute now; unfilled quantity is cancelled instantly.</p>
+
+            <label for="marketOrderTagInput">Tag</label>
+            <input id="marketOrderTagInput" type="text" placeholder="excel_place_order" />
+
+            <label for="marketOrderTickSizeInput">Tick Size (Rs)</label>
+            <input id="marketOrderTickSizeInput" type="number" min="0.01" step="0.01" placeholder="Auto (0.05)" />
+
+            <p class="field-hint-tight">Optional override. Blank uses instrument/default tick and snaps the buffered limit to a valid price step.</p>
+
+            <p class="field-hint-tight">Submit uses current LTP with a 20 bps side-aware limit buffer.</p>
+
+            <button id="placeMarketOrderButton" type="button">Place Buffered Order</button>
+          </div>
+
+          <div id="marketOrderActionMsg" class="field-msg hidden top-gap" aria-live="polite"></div>
+
+          <div class="top-gap">
+            <h2 class="subsection-title">Last Response</h2>
+            <pre id="marketOrderResponse">No buffered LTP order submitted yet.</pre>
+          </div>
+        </section>
+
+        <section id="singleTradesCard" class="card active-strategy-shell">
+          <div class="row spread">
+            <div>
+              <h2>Single Trade Dashboard</h2>
+              <p class="caption">Track live single trades, attach a broker SL, set an app-managed target, or exit immediately.</p>
+            </div>
+            <span class="status-pill">Live</span>
+          </div>
+
+          <div id="singleTradeActionMsg" class="field-msg hidden top-gap" aria-live="polite"></div>
+
+          <div class="top-gap">
+            <div id="singleTradesResponse" class="active-strategies-empty">No live single trade yet.</div>
+          </div>
+        </section>
+
+        <section id="strategyPreviewCard" class="card master-order-card">
+          <div class="row spread">
+            <div>
+              <h2>Flexi Strategy Builder</h2>
+              <p class="caption">Build, track, and deploy delta-based strategies from one panel.</p>
+            </div>
+            <span class="status-pill">UAT Flow</span>
+          </div>
+
+          <div class="grid top-gap strategy-builder-grid">
+            <label for="strategyPreviewAssetInput">Asset</label>
+            <input id="strategyPreviewAssetInput" list="optionUnderlyingList" type="text" placeholder="NIFTY / RELIANCE" />
+
+            <label for="strategyPreviewExpiryInput">Expiry (YYYYMMDD)</label>
+            <input id="strategyPreviewExpiryInput" list="expiryList" type="text" placeholder="20260326" />
+
+            <label for="strategyPreviewExchangeSelect">Exchange</label>
+            <select id="strategyPreviewExchangeSelect">
+              <option value="NSE">NSE</option>
+              <option value="BSE">BSE</option>
+            </select>
+
+            <label for="strategyPreviewTypeSelect">Strategy</label>
+            <select id="strategyPreviewTypeSelect">
+              <option value="straddle">straddle</option>
+              <option value="strangle">strangle</option>
+              <option value="iron_butterfly">iron_butterfly</option>
+              <option value="iron_condor">iron_condor</option>
+            </select>
+
+            <label for="strategyPreviewTargetDeltaSelect">Target Delta</label>
+            <select id="strategyPreviewTargetDeltaSelect"></select>
+
+            <label for="strategyPreviewPairNumberInput">Pair Number (optional)</label>
+            <input id="strategyPreviewPairNumberInput" type="number" min="1" step="1" placeholder="1" />
+
+            <label for="trackedOrderQtyInput">Requested Order Qty (optional)</label>
+            <input id="trackedOrderQtyInput" type="number" min="1" step="1" placeholder="Auto lot size" />
+
+            <div class="strategy-action-row strategy-action-row-primary">
+              <button id="buildStrategyPreviewButton" type="button" class="secondary hidden">Build Strategy Preview</button>
+              <button id="trackStrategyPreviewButton" type="button">Track</button>
+              <button id="masterDeployButton" type="button" class="secondary">Deploy</button>
+            </div>
+
+            <div class="strategy-action-row">
+              <button id="clearTrackedStrategyButton" type="button" class="secondary">Clear Tracked Legs</button>
+              <button id="openPlaceOrderSheetButton" type="button" class="secondary">Open PlaceOrder Sheet</button>
+            </div>
+          </div>
+
+          <div id="strategyPreviewActionMsg" class="field-msg hidden top-gap" aria-live="polite"></div>
+
+          <div class="top-gap hidden" aria-hidden="true">
+            <h2 class="subsection-title">Preview Response</h2>
+            <pre id="strategyPreviewResponse">No strategy preview built yet.</pre>
+          </div>
+        </section>
+
+        <section id="activeStrategiesCard" class="card active-strategy-shell">
+          <div class="row spread">
+            <div>
+              <h2>Current Strategies</h2>
+              <p class="caption">Fast live rail for active trades only. Closed strategies move out immediately after confirmation.</p>
+            </div>
+            <span class="status-pill">Auto</span>
+          </div>
+
+          <div class="top-gap">
+            <div id="activeStrategiesResponse" class="active-strategies-empty">No live strategy yet.</div>
+          </div>
+        </section>
+
+        <section id="trackedPreviewCard" class="card">
+          <div class="row spread">
+            <div>
+              <h2>Tracked Preview</h2>
+              <p class="caption">Tracked strategies stay here until they are actually deployed. No half-live state.</p>
+            </div>
+            <span class="status-pill">Preview</span>
+          </div>
+
+          <div class="top-gap">
+            <div id="trackedPreviewResponse" class="active-strategies-empty">No tracked strategy yet.</div>
+          </div>
+        </section>
+
+        <section id="strategyEventsCard" class="card">
+          <div class="row spread">
+            <div>
+              <h2>Latest Events</h2>
+              <p class="caption">Tiny activity feed so the lifecycle is visible without opening raw JSON.</p>
+            </div>
+            <span class="status-pill">Live</span>
+          </div>
+
+          <div class="top-gap">
+            <div id="strategyEventFeedResponse" class="active-strategies-empty">No lifecycle events yet.</div>
+          </div>
+        </section>
+
+        <section class="card hidden" aria-hidden="true">
+          <div class="row spread">
+            <div>
+              <h2>Order Lookup</h2>
+              <p class="caption">Inspect day orders, specific order ids, and basket tags from the same UAT session.</p>
+            </div>
+          </div>
+
+          <div class="grid top-gap">
+            <label for="orderLookupTagInput">Tag Filter</label>
+            <input id="orderLookupTagInput" type="text" placeholder="excel_market_order" />
+
+            <label for="orderLookupModeSelect">Day Order Filter</label>
+            <select id="orderLookupModeSelect">
+              <option value="all">All</option>
+              <option value="live">Live</option>
+              <option value="executed">Executed</option>
+            </select>
+
+            <button id="fetchOrdersButton" type="button">Fetch Day Orders</button>
+
+            <label for="orderLookupIdInput">Order ID</label>
+            <input id="orderLookupIdInput" type="number" min="1" step="1" placeholder="6261" />
+
+            <button id="fetchOrderByIdButton" type="button" class="secondary">Fetch Order By ID</button>
+
+            <label for="basketLookupTagInput">Basket Tag</label>
+            <input id="basketLookupTagInput" type="text" placeholder="strategy_entry_tag" />
+
+            <button id="fetchBasketByTagButton" type="button" class="secondary">Fetch Basket By Tag</button>
+          </div>
+
+          <div id="orderLookupActionMsg" class="field-msg hidden top-gap" aria-live="polite"></div>
+
+          <div class="top-gap">
+            <h2 class="subsection-title">Lookup Response</h2>
+            <pre id="orderLookupResponse">No order lookup executed yet.</pre>
+          </div>
+        </section>
+
+        <section id="deployBasketCard" class="card risk-sensitive-card hidden">
+          <div class="row spread">
+            <div>
+              <h2>Deploy Basket Preview</h2>
+              <p class="caption">Exact flexi-order request preview from `nubra_optionschain`. Live submit is enabled for UAT market baskets only.</p>
+            </div>
+            <span class="status-pill">UAT Only</span>
+          </div>
+
+          <div class="grid top-gap">
+            <label for="deployPreviewPriceTypeSelect">Basket Price Type</label>
+            <select id="deployPreviewPriceTypeSelect">
+              <option value="LIMIT">LIMIT</option>
+              <option value="MARKET">MARKET</option>
+            </select>
+
+            <label for="deployPreviewDeliveryTypeSelect">Delivery Type</label>
+            <select id="deployPreviewDeliveryTypeSelect">
+              <option value="ORDER_DELIVERY_TYPE_CNC">CNC</option>
+              <option value="ORDER_DELIVERY_TYPE_IDAY">IDAY</option>
+            </select>
+
+            <label for="deployPreviewMultiplierInput">Multiplier</label>
+            <input id="deployPreviewMultiplierInput" type="number" min="1" step="1" value="1" />
+
+            <button id="buildDeployPreviewButton" type="button">Build Deploy Basket Preview</button>
+            <button id="submitDeployBasketButton" type="button" class="secondary">Submit Basket Order (UAT)</button>
+          </div>
+
+          <div id="deployPreviewActionMsg" class="field-msg hidden top-gap" aria-live="polite"></div>
+
+          <div class="top-gap">
+            <h2 class="subsection-title">Deploy Request Body</h2>
+            <pre id="deployPreviewResponse">No deploy basket preview built yet.</pre>
+          </div>
+
+          <div class="top-gap">
+            <h2 class="subsection-title">Last Basket Submit Response</h2>
+            <pre id="basketSubmitResponse">No basket order submitted yet.</pre>
+          </div>
+        </section>
+
+        <section class="card hidden" aria-hidden="true">
+          <div class="row spread">
+            <div>
+              <h2>Basket Monitor</h2>
+              <p class="caption">Watch broker basket state and history by tag while deploy or square-off is in progress.</p>
+            </div>
+            <span class="status-pill">Monitor</span>
+          </div>
+
+          <div class="grid top-gap">
+            <label for="basketMonitorTagInput">Basket Tag</label>
+            <input id="basketMonitorTagInput" type="text" placeholder="strategy_entry_tag" />
+
+            <label class="inline-checkbox" for="basketMonitorAutoRefreshInput">
+              <input id="basketMonitorAutoRefreshInput" type="checkbox" checked />
+              Auto refresh basket monitor
+            </label>
+
+            <button id="refreshBasketMonitorButton" type="button">Refresh Basket Monitor</button>
+          </div>
+
+          <div id="basketMonitorActionMsg" class="field-msg hidden top-gap" aria-live="polite"></div>
+
+          <div class="top-gap">
+            <h2 class="subsection-title">Basket Monitor Response</h2>
+            <pre id="basketMonitorResponse">No basket monitor snapshot yet.</pre>
+          </div>
+        </section>
+
+        <section id="squareOffCard" class="card risk-sensitive-card hidden" aria-hidden="true">
+          <div class="row spread">
+            <div>
+              <h2>Square-Off</h2>
+              <p class="caption">UAT-only safe exit flow. Exit legs are trimmed against live net positions before submit.</p>
+            </div>
+            <span class="status-pill">UAT Only</span>
+          </div>
+
+          <div class="grid top-gap">
+            <label for="squareOffDeliveryTypeSelect">Delivery Type</label>
+            <select id="squareOffDeliveryTypeSelect">
+              <option value="ORDER_DELIVERY_TYPE_CNC">CNC</option>
+              <option value="ORDER_DELIVERY_TYPE_IDAY">IDAY</option>
+            </select>
+
+            <label for="squareOffMultiplierInput">Multiplier</label>
+            <input id="squareOffMultiplierInput" type="number" min="1" step="1" value="1" />
+
+            <button id="buildSquareOffPreviewButton" type="button">Build Square-Off Preview</button>
+            <button id="submitSquareOffButton" type="button" class="secondary">Submit Square-Off (UAT)</button>
+            <button id="refreshSquareOffStatusButton" type="button" class="secondary">Refresh Square-Off Status</button>
+          </div>
+
+          <div id="squareOffActionMsg" class="field-msg hidden top-gap" aria-live="polite"></div>
+
+          <div class="top-gap">
+            <h2 class="subsection-title">Square-Off Preview</h2>
+            <pre id="squareOffPreviewResponse">No square-off preview built yet.</pre>
+          </div>
+
+          <div class="top-gap">
+            <h2 class="subsection-title">Last Square-Off Submit Response</h2>
+            <pre id="squareOffSubmitResponse">No square-off order submitted yet.</pre>
+          </div>
+        </section>
+
+        <section id="completedTradesCard" class="card">
+          <div class="row spread">
+            <div>
+              <h2>Completed Trades</h2>
+              <p class="caption">Immutable closed summaries with locked booked PnL.</p>
+            </div>
+            <button id="toggleTradeHistoryButton" type="button" class="mini-btn secondary">Show History</button>
+          </div>
+          <p id="completedTradesWindowLabel" class="caption top-gap">Showing only last 24 hours.</p>
+
+          <div class="top-gap">
+            <div id="completedTradesResponse" class="completed-trades-empty">No closed trades archived yet.</div>
+          </div>
+        </section>
       </section>
     </main>
     <div id="workspaceLoader" class="workspace-loader hidden" aria-live="polite" aria-busy="true">
@@ -271,6 +666,7 @@
       </div>
     </div>
 
-    <script src="./taskpane.js?v=20260226-prod-otpfix1"></script>
+    <script src="./taskpane.js?v=20260318-placeorder-refresh21"></script>
   </body>
 </html>
+

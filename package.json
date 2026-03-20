@@ -6,7 +6,10 @@
   "scripts": {
     "setup": "powershell -ExecutionPolicy Bypass -File \"./setup-local.ps1\"",
     "start": "powershell -ExecutionPolicy Bypass -File \"./start-all.ps1\"",
-    "stop": "powershell -ExecutionPolicy Bypass -File \"./stop-all.ps1\""
+    "stop": "powershell -ExecutionPolicy Bypass -File \"./stop-all.ps1\"",
+    "build:dist": "powershell -ExecutionPolicy Bypass -File \"./build-distribution.ps1\" -SkipZip",
+    "validate:dist": "powershell -ExecutionPolicy Bypass -File \"./validate-distribution.ps1\"",
+    "validate:dist:allow-foreign": "powershell -ExecutionPolicy Bypass -File \"./validate-distribution.ps1\" -AllowForeignDevServer"
   },
   "dependencies": {
     "protobufjs": "^8.0.0"

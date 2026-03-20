@@ -32,7 +32,7 @@
   </Requirements>
 
   <DefaultSettings>
-    <SourceLocation DefaultValue="https://localhost:3000/taskpane.html?v=20260226-prod-otpfix1" />
+    <SourceLocation DefaultValue="https://localhost:3000/taskpane.html?v=20260312-master-order-ui9" />
   </DefaultSettings>
 
   <Permissions>ReadWriteDocument</Permissions>
@@ -88,7 +88,7 @@
       <bt:Urls>
         <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://nubra.io" />
         <bt:Url id="Commands.Url" DefaultValue="https://localhost:3000/commands.html" />
-        <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3000/taskpane.html?v=20260226-prod-otpfix1" />
+        <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3000/taskpane.html?v=20260312-master-order-ui9" />
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GetStarted.Title" DefaultValue="Nubra Excel Plugin" />

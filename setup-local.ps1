@@ -11,10 +11,43 @@ function Test-IsAdmin {
   return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-function Require-Command {
-  param([string]$Name)
-  if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
-    throw "Missing required command: $Name"
+function Resolve-NodeExe {
+  param([string]$Root)
+
+  $candidates = @(
+    (Join-Path $Root "runtime\node\node.exe"),
+    (Join-Path $env:ProgramFiles "nodejs\node.exe")
+  )
+
+  foreach ($candidate in $candidates) {
+    if ($candidate -and (Test-Path $candidate)) {
+      return (Resolve-Path $candidate).Path
+    }
+  }
+
+  $cmd = Get-Command "node" -ErrorAction SilentlyContinue
+  if ($cmd) {
+    return $cmd.Source
+  }
+
+  throw "Node.js runtime not found. Expected bundled runtime at .\runtime\node\node.exe or a system node.exe."
+}
+
+function Invoke-NodeCli {
+  param(
+    [string]$NodeExe,
+    [string]$CliScript,
+    [string[]]$Arguments,
+    [string]$WorkingDirectory
+  )
+
+  if (-not (Test-Path $CliScript)) {
+    throw "CLI script not found: $CliScript"
+  }
+
+  & $NodeExe $CliScript @Arguments
+  if ($LASTEXITCODE -ne 0) {
+    throw "Command failed: $CliScript $($Arguments -join ' ')"
   }
 }
 
@@ -33,8 +66,16 @@ function Test-TrustedLocalhostCert {
   return $false
 }
 
-Write-Host "[setup] Checking prerequisites..."
-Require-Command "node"
+$pluginRoot = (Resolve-Path $PSScriptRoot).Path
+$manifestPath = Join-Path $pluginRoot "manifest.xml"
+$nodeModulesPath = Join-Path $pluginRoot "node_modules"
+$devCertCli = Join-Path $pluginRoot "node_modules\office-addin-dev-certs\cli.js"
+$devSettingsCli = Join-Path $pluginRoot "node_modules\office-addin-dev-settings\cli.js"
+$nodeExe = Resolve-NodeExe -Root $pluginRoot
+
+if (-not (Test-Path $manifestPath)) {
+  throw "manifest.xml not found: $manifestPath"
+}
 
 if (-not (Test-IsAdmin)) {
   Write-Host "[setup] Admin rights required for loopback exemptions. Requesting elevation..."
@@ -50,41 +91,38 @@ if (-not (Test-IsAdmin)) {
   exit $proc.ExitCode
 }
 
-$npxCmd = Join-Path $env:ProgramFiles "nodejs\npx.cmd"
-if (-not (Test-Path $npxCmd)) {
-  $npxCmd = "npx"
-}
-
-$pluginRoot = Resolve-Path $PSScriptRoot
-$manifestPath = Join-Path $PSScriptRoot "manifest.xml"
-
-if (-not (Test-Path $manifestPath)) {
-  throw "manifest.xml not found: $manifestPath"
-}
-
 Push-Location $pluginRoot
 try {
   if (-not $SkipNpmInstall) {
-    if (-not (Test-Path (Join-Path $pluginRoot "node_modules"))) {
+    if (-not (Test-Path $nodeModulesPath)) {
+      $npmCli = Join-Path (Split-Path $nodeExe -Parent) "node_modules\npm\bin\npm-cli.js"
+      if (-not (Test-Path $npmCli)) {
+        throw "npm CLI not found. Bundled installs require node_modules to already be present or a system npm installation."
+      }
       Write-Host "[setup] Installing npm packages..."
-      npm install
+      & $nodeExe $npmCli install
       if ($LASTEXITCODE -ne 0) { throw "npm install failed with exit code $LASTEXITCODE" }
     } else {
       Write-Host "[setup] node_modules already present, skipping npm install."
     }
   }
 
+  if (-not (Test-Path $devCertCli)) {
+    throw "office-addin-dev-certs CLI not found. Ensure node_modules is present."
+  }
+  if (-not (Test-Path $devSettingsCli)) {
+    throw "office-addin-dev-settings CLI not found. Ensure node_modules is present."
+  }
+
   if (Test-TrustedLocalhostCert) {
     Write-Host "[setup] Trusted localhost certificate already present, skipping cert install."
   } else {
     Write-Host "[setup] Installing and trusting Office dev certificate..."
-    & $npxCmd --yes office-addin-dev-certs install
-    if ($LASTEXITCODE -ne 0) { throw "office-addin-dev-certs install failed with exit code $LASTEXITCODE" }
+    Invoke-NodeCli -NodeExe $nodeExe -CliScript $devCertCli -Arguments @("install") -WorkingDirectory $pluginRoot
   }
 
   Write-Host "[setup] Enabling loopback for Office app container..."
-  & $npxCmd --yes office-addin-dev-settings appcontainer "$manifestPath" --loopback -y
-  if ($LASTEXITCODE -ne 0) { throw "office-addin-dev-settings appcontainer failed with exit code $LASTEXITCODE" }
+  Invoke-NodeCli -NodeExe $nodeExe -CliScript $devSettingsCli -Arguments @("appcontainer", $manifestPath, "--loopback", "-y") -WorkingDirectory $pluginRoot
 
   Write-Host "[setup] Adding explicit loopback exemptions..."
   cmd /c "CheckNetIsolation LoopbackExempt -a -n=Microsoft.Win32WebViewHost_cw5n1h2txyewy" | Out-Host

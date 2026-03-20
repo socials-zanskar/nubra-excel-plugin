@@ -1,380 +1,264 @@
-# Nubra Excel Plugin Version 1
+# Nubra Excel Plugin
 
-Nubra Excel Plugin Version 1 is a Windows-based Excel add-in that lets Nubra users log in with OTP and MPIN, open live market sheets inside Excel, view positions, and build historical data sheets.
+## Purpose
+The Nubra Excel Plugin is a Microsoft Excel Office Add-in developed on behalf of Nubra to provide authenticated market access and live trading data directly inside Excel.
 
-This README is written as an end-user installation and usage guide first. The technical implementation notes are kept near the bottom for reference.
+This plugin supports:
+- OTP and MPIN-based user authentication
+- Instrument reference-data sync
+- Live WebSocket market feeds
+- Positions retrieval over REST
+- Historical candles retrieval over REST with chart output in Excel
 
-## Watch The Full Setup Video
+The implementation is Node.js-based and does not require Python.
 
-[![Watch the Nubra Excel Plugin Version 1 setup video](docs/images/version-1-setup-video-thumbnail.png)](https://drive.google.com/file/d/1GQuqiBg8c96z_3vCJaZgwPPsqSJMWkBN/view)
+## Functional Scope
+The add-in manages and updates the following sheets:
+- `Instruments`: reference data sync
+- `Master`: normalized live stream output
+- `LivePrices`: live price updates
+- `LiveOptionChain`: option-chain live updates
+- `Positions`: REST-based positions snapshot
+- `Historical`: historical candles + auto-generated line chart
 
-Prefer a walkthrough first? Watch the complete Version 1 setup video here:
+## Technology Overview
+- Frontend: HTML/CSS/JavaScript (Office task pane)
+- Local bridge/server: Node.js (`dev-server.js`)
+- Add-in manifest: `manifest.xml`
+- Launch automation: PowerShell scripts
+  - `setup-local.ps1`
+  - `start-all.ps1`
+  - `stop-all.ps1`
+- Distribution build: `build-distribution.ps1`
 
-- [Open the setup video on Google Drive](https://drive.google.com/file/d/1GQuqiBg8c96z_3vCJaZgwPPsqSJMWkBN/view)
+## Environment Requirements
+- Windows machine
+- Microsoft Excel (desktop, Microsoft 365 recommended)
+- PowerShell 5.1+
+- Internet access to Nubra REST and WebSocket endpoints
+- Administrator privileges (one-time setup step for loopback exemption)
 
-## Installation Methods
+## Runtime Modes
+There are now two supported launch modes:
 
-You can start Nubra Excel Plugin Version 1 in two ways:
+1. Development machine
+- Uses system Node if available
+- Can still run:
+  - `npm run setup`
+  - `npm run start`
 
-- Recommended for most users: use the packaged `.exe` launcher
-- Fallback for developers or troubleshooting: use the PowerShell and npm setup flow
+2. Bundled distribution
+- Uses shipped runtime under `runtime\node\node.exe`
+- Uses shipped `node_modules`
+- Does not require the end user to install `node`, `npm`, or `npx`
+- Launch entrypoint:
+  - `NubraExcelLauncher.exe`
 
-## What Version 1 Includes
+## Prerequisite Downloads (Development Only)
+Install these before running `npm run setup` on the build/development machine:
 
-- OTP + MPIN authentication
-- UAT and PROD environment switch
-- `Instruments` sheet sync
-- `LivePrices` sheet
-- `LiveOptionChain` sheet
-- `Master` sheet that combines active live streams
-- `Positions` sheet
-- `Historical` sheet with chart creation
+1. Node.js LTS
+   - Download: `https://nodejs.org/`
+   - Verify in PowerShell:
+     ```powershell
+     node -v
+     npm -v
+     ```
+2. Microsoft Excel Desktop (Microsoft 365)
+   - Ensure Excel desktop app is installed and opens normally.
+3. PowerShell 5.1+ (Windows default on supported systems)
+   - Verify:
+     ```powershell
+     $PSVersionTable.PSVersion
+     ```
 
-## Before You Start
+## If Setup Stops Due to Missing Tools
+If development setup stops with missing command errors:
 
-Make sure you have:
+1. Install Node.js LTS from `https://nodejs.org/`.
+2. Close and reopen terminal.
+3. Verify:
+   ```powershell
+   node -v
+   npm -v
+   ```
+4. Retry:
+   ```powershell
+   npm run setup
+   npm run start
+   ```
 
-- Windows
-- Microsoft Excel desktop installed
-- Node.js and npm installed
-- A Nubra account with phone number, OTP access, and MPIN
-- Internet access
+## Project Structure
+- `taskpane.html`, `taskpane.js`, `taskpane.css`: Excel task pane UI and logic
+- `dev-server.js`: HTTPS local dev server and WebSocket bridge
+- `manifest.xml`: Office Add-in manifest for sideloading
+- `setup-local.ps1`: one-time local machine preparation using bundled or system Node
+- `start-all.ps1`: starts server and sideloads into Excel using bundled or system Node
+- `stop-all.ps1`: unregisters add-in and stops local server process
+- `build-distribution.ps1`: creates a shippable folder/zip with runtime + dependencies
 
-For the current Version 1 package, `NubraExcelLauncher.exe` is not a fully standalone installer. It works correctly when these prerequisites are already available on the machine.
-
-## Recommended Installation Using The EXE
-
-### Step 1: Open the Release Package
-
-Use the packaged release folder or ZIP that contains:
-
-- `NubraExcelLauncher.exe`
-- `setup-local.ps1`
-- `start-all.ps1`
-- `stop-all.ps1`
-- `manifest.xml`
-- the plugin web assets and icons
-
-If you are using the ZIP package, extract it first. Do not run the launcher from inside the ZIP.
-
-### Step 2: Run `NubraExcelLauncher.exe`
-
-Double-click:
-
-```text
-NubraExcelLauncher.exe
-```
-
-The launcher is designed to:
-
-- request administrator access if Windows requires it
-- run the one-time setup
-- start the local Nubra Excel Plugin services
-- sideload the add-in into Excel
-
-If Node.js, npm, and Excel desktop are already installed, running this EXE from the extracted package is the main step the user needs.
-
-### Step 3: If Windows Protects Your PC, Click `More info` And Continue
-
-On some systems, Windows Defender SmartScreen may show a message like:
-
-```text
-Windows protected your PC
-```
-
-If this appears:
-
-1. Click `More info`
-2. Click `Run anyway` or the available continue option
-
-This can happen because the launcher is an internal or newly packaged EXE and may not yet be recognized by SmartScreen.
-
-### Step 4: Allow Setup To Complete
-
-During the first launch, the EXE will run the same setup used by the manual flow. This may:
-
-- install npm packages
-- install and trust the Office development certificate
-- enable Office loopback access
-- register and sideload the add-in
-
-Important:
-
-- Windows may show a User Account Control prompt
-- allow the prompt so setup can finish correctly
-- the first run may take longer than later runs
-
-After this completes, the plugin is ready to open in Excel.
-
-### Step 5: Open Excel And The Nubra Add-in
-
-After setup completes, Excel should open with the plugin available.
-
-If the task pane does not appear automatically:
-
-1. Open Excel
-2. Go to the `Home` tab
-3. Find the `Nubra` group
-4. Click `Open Nubra Plugin`
-
-### Step 6: Reopen The Plugin Later
-
-For future launches, open the same extracted folder and run:
-
-```text
-NubraExcelLauncher.exe
-```
-
-The launcher will start the plugin again and reuse the same setup flow.
-
-### Step 7: Stop The Plugin
-
-To stop the plugin and unregister the sideloaded add-in, run the stop script from the same extracted folder:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\stop-all.ps1
-```
-
-If you prefer terminal commands and are already inside the project folder, you can also use:
-
-```powershell
-npm run stop
-```
-
-## Advanced Manual Setup (Fallback)
-
-Use this section only if the `.exe` launcher does not work, or if you want to run the plugin directly from the source project.
-
-### Step 1: Download the Project
-
-Clone this repository, or download and extract the ZIP into a local folder.
-
-```powershell
-git clone https://github.com/socials-zanskar/nubra-excel-plugin.git
-cd nubra-excel-plugin
-```
-
-### Step 2: Open PowerShell in the Project Folder
-
-Open PowerShell in the root folder of the project, where `package.json` is located.
-
-### Step 3: Run One-Time Setup
-
-Run the following command:
+## One-Time Setup
+Run once on a new machine:
 
 ```powershell
 npm run setup
 ```
 
-This one-time setup:
+What this does:
+- Installs dependencies (if needed)
+- Installs/trusts Office development localhost certificate
+- Enables Office/WebView loopback for `https://localhost:3000`
+- Applies required app container loopback exemptions
 
-- installs npm packages if needed
-- installs and trusts the Office development certificate
-- enables loopback for Office
-- prepares sideloading for the Excel add-in
-
-Important:
-
-- Windows may ask for administrator permission during setup
-- allow the prompt so the loopback and Office setup can complete successfully
-
-### Step 4: Start the Plugin
-
-Run:
+## Launch the Extension
+Development:
 
 ```powershell
 npm run start
 ```
 
 This command:
+- Starts the local HTTPS server at `https://localhost:3000`
+- Verifies server readiness via `/ws/status`
+- Registers and sideloads the add-in manifest into desktop Excel
 
-- starts the local HTTPS dev server at `https://localhost:3000`
-- registers the add-in manifest
-- sideloads the add-in into Excel
-
-### Step 5: Wait for Excel to Open
-
-After startup finishes, Excel should open with the Nubra add-in available.
-
-If the task pane does not open automatically:
-
-1. Open Excel
-2. Go to the `Home` tab
-3. Look for the `Nubra` group
-4. Click `Open Nubra Plugin`
-
-## First-Time Login Guide
-
-### Step 1: Choose the Environment
-
-At the top of the plugin, select either:
-
-- `UAT` for testing
-- `PROD` for live usage
-
-### Step 2: Enter Your Phone Number
-
-Type your 10-digit mobile number in the `Phone` field.
-
-If your login flow requires it, you can also use the `Skip TOTP route` checkbox.
-
-### Step 3: Send OTP
-
-Click:
-
-```text
-1) Send OTP
-```
-
-You should receive an OTP on your registered mobile number.
-
-### Step 4: Verify OTP
-
-Enter the 6-digit OTP and click:
-
-```text
-2) Verify OTP
-```
-
-After successful verification, the plugin will move you to the MPIN step.
-
-### Step 5: Verify MPIN and Log In
-
-Enter your 4-digit MPIN and click:
-
-```text
-3) Verify MPIN (Login)
-```
-
-After login:
-
-- the authentication badge will change to authenticated
-- the plugin can prepare data sheets
-- the `Instruments` sheet may be synced automatically
-
-## How to Use the Plugin
-
-### Live Prices
-
-To start live prices:
-
-1. Open `Live Prices WebSocket`
-2. Enter one or more symbols separated by commas
-3. Select exchange
-4. Select interval
-5. Click `Start Live Prices WS`
-
-This creates or refreshes the `LivePrices` sheet in Excel.
-
-### Live Option Chain
-
-To start live option chain data:
-
-1. Open `Live Option Chain WebSocket`
-2. Enter the asset, for example `NIFTY` or `BANKNIFTY`
-3. Enter expiry in `YYYYMMDD` format
-4. Select exchange
-5. Select interval
-6. Click `Start Live Option Chain WS`
-
-This creates or refreshes the `LiveOptionChain` sheet.
-
-### Master Sheet
-
-The `Master` sheet combines active live streams into one working view.
-
-To use it:
-
-1. Start `Live Prices`
-2. Start `Live Option Chain`
-3. Open `Master WebSocket`
-4. Review the projected data inside the `Master` sheet
-
-### Positions
-
-To build the positions sheet:
-
-1. Open `Positions (REST)`
-2. Click `Build/Refresh Positions Sheet`
-
-This creates or refreshes the `Positions` sheet.
-
-### Historical Data
-
-To build historical data and chart:
-
-1. Open `Historical Data (REST)`
-2. Enter the stock, index, or option symbol
-3. Select type
-4. Select exchange
-5. Choose start date and end date
-6. Select interval
-7. Click `Build Historical Sheet + Chart`
-
-This creates a historical worksheet and chart in Excel.
-
-## Excel Sheets Created by the Plugin
-
-Depending on what you use, the plugin can create these sheets:
-
-- `Instruments`
-- `LivePrices`
-- `LiveOptionChain`
-- `Master`
-- `Positions`
-- `Historical`
-
-## Stop the Plugin
-
-If you started the plugin using the extracted EXE package, stop it with:
+Bundled distribution:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\stop-all.ps1
+.\NubraExcelLauncher.exe
 ```
 
-If you started it from the source project using npm, run:
+This launcher:
+- runs `setup-local.ps1`
+- runs `start-all.ps1`
+- uses the bundled runtime when present
+
+## Stop the Extension
+Run:
 
 ```powershell
 npm run stop
 ```
 
-Both options remove the sideloaded add-in and stop the local dev server.
+For a shipped bundle, run:
 
-## Troubleshooting
+```powershell
+.\stop-all.ps1
+```
 
-### Setup asks for admin permission
+## Build a Distribution Bundle
+On the build machine:
 
-This is expected on the first EXE launch and during `npm run setup`. The setup flow needs elevated rights to configure Office loopback access.
+```powershell
+npm run build:dist
+```
 
-### Excel opens but the plugin is missing
+This produces:
+- `ship\NubraExcelPlugin\`
+- optional `NubraExcelPlugin.zip` (when zip is enabled)
 
-Try these checks:
+The bundle includes:
+- plugin files
+- `node_modules`
+- bundled Node runtime under `runtime\node`
+- `NubraExcelLauncher.exe`
 
-- confirm the EXE setup completed without errors
-- make sure Excel desktop is installed
-- open Excel and check `Home > Nubra > Open Nubra Plugin`
-- close Excel and run `NubraExcelLauncher.exe` again
-- if needed, use the manual fallback steps and run `npm run stop` followed by `npm run start`
+To include zip explicitly:
 
-### Localhost certificate warning
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build-distribution.ps1
+```
 
-Run the EXE again or use `npm run setup`, and allow the Office certificate installation prompt.
+For fastest local iteration (folder only, no zip):
 
-## Technical Notes
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build-distribution.ps1 -SkipZip
+```
 
-These notes are kept for developers and maintainers.
+## Validate a Built Distribution
+After building `ship\NubraExcelPlugin`, run:
 
-- No Python runtime is required
-- Local server runs on `https://localhost:3000`
-- Auth uses OTP and MPIN flow
-- Session tokens are stored in browser local storage for MVP convenience
-- `x-device-id` is generated once and reused
-- Main REST and WebSocket integrations target Nubra UAT and production APIs
+```powershell
+npm run validate:dist
+```
 
-### Endpoints Used
+What it validates:
+- required bundle files exist
+- bundled Node runtime executes
+- bundle `start-all.ps1` launches bundle-specific `dev-server.js`
+- health endpoint is reachable
+- bundle `stop-all.ps1` shuts down the bundle-specific server process
 
-- Auth REST: `sendphoneotp`, `verifyphoneotp`, `verifypin`
-- Refdata REST: `refdata/refdata/{date}?exchange=...`
-- Positions REST: `portfolio/positions`
-- Local WS bridge: `/ws/start`, `/ws/events`, `/ws/stop`, `/ws/status`
-- Nubra WS targets: `wss://api.nubra.io/apibatch/ws`, `wss://uatapi.nubra.io/apibatch/ws`
+If another project already runs a `dev-server.js` on your machine and you still want to validate:
+
+```powershell
+npm run validate:dist:allow-foreign
+```
+
+## API and Connectivity Context
+REST endpoints used by the plugin:
+- Auth: `sendphoneotp`, `verifyphoneotp`, `verifypin`
+- Refdata: `refdata/refdata/{date}?exchange=...`
+- Positions: `portfolio/positions`
+- Historical: `POST /charts/timeseries`
+
+Local bridge endpoints:
+- `/ws/start`
+- `/ws/events`
+- `/ws/stop`
+- `/ws/status`
+
+Nubra WebSocket upstream targets:
+- `wss://api.nubra.io/apibatch/ws`
+- `wss://uatapi.nubra.io/apibatch/ws`
+
+## Historical Data Module
+The task pane includes a dedicated **Historical Data (REST)** section with:
+- Symbol input: `Stock/Index/Option`
+- Type: `STOCK`, `INDEX`, `OPT`
+- Exchange: `NSE`, `BSE`
+- Date range: `Start Date`, `End Date` (IST UI dates)
+- Interval: `1s`, `1m`, `2m`, `3m`, `5m`, `15m`, `30m`, `1h`, `1d`, `1w`, `1mt`
+- Action: `Build Historical Sheet + Chart`
+
+### Validation and Constraints
+- Login is required before historical requests.
+- `Start Date` and `End Date` are mandatory.
+- `Start Date` cannot be greater than `End Date`.
+- `1s` interval is allowed only in `LIVE/PROD`.
+- For `1s`, start and end date must be the same day.
+- For `1s` in `LIVE/PROD`, selected day must be within previous 7 days.
+
+### Historical Request Payload (high level)
+The add-in sends `POST /charts/timeseries` with:
+- `exchange`, `type`, `values` (symbol list)
+- `fields`: `open`, `high`, `low`, `close`, `volume`
+- `startDate` and `endDate` converted from IST date selection to UTC ISO
+- `interval`, `intraDay: false`, `realTime: false`
+
+### Historical Output in Excel
+The add-in creates or refreshes a worksheet named `Historical` and writes:
+- Metadata block: symbol, type, exchange, interval, start/end date, update time
+- Candle table columns: `ts_ist`, `close`, `open`, `high`, `low`, `volume`
+- Numeric formatting for OHLC columns
+- A line chart of close price (`symbol Close (interval)`) placed on the same sheet
+
+## Authentication and Session Behavior
+- `x-device-id` is generated once and reused for the client
+- OTP step transitions automatically to MPIN step in UI flow
+- On successful login, authentication panel is collapsed and state is reflected in UI
+- Session artifacts are stored in browser local storage (MVP behavior)
+
+## Operational Notes
+- If setup was not run as admin, loopback configuration may fail
+- If sideload does not appear in Excel, rerun `npm run start`
+- Dev server logs are written to `dev-server.log`
+- If startup fails, inspect the log and confirm certificate trust and loopback exemptions
+- The shipped bundle does not require user-installed `node`, `npm`, or `npx`
+
+## Compliance and Deployment Note
+This repository currently targets local development and sideload validation. For broker-grade production deployment, hardening is recommended for:
+- Session/token storage strategy
+- Secret management and environment isolation
+- Audit logging and user activity traceability
+- Secure packaging and controlled distribution

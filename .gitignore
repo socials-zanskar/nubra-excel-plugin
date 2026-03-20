@@ -1,9 +1,19 @@
 node_modules/
 ship/
+release/
 .setup-complete
 *.log
+NubraExcelPlugin.zip
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .DS_Store
 Thumbs.db
+.codex_tmp/
+excel/
+Excel plugin AppSource/
+excel-plugin-multi-user/
+excel-plugin-multi-user-v2/
+openalgo-fresh/
+ui-concepts/
+NubraExcelLauncher.exe

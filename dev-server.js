@@ -15,6 +15,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = __dirname;
 const LOG_PATH = path.join(__dirname, "dev-server.log");
+const LOOPBACK_HOST = "localhost";
+const ALLOWED_CORS_ORIGINS = new Set([
+  `https://localhost:${PORT}`,
+  `https://127.0.0.1:${PORT}`,
+  `https://[::1]:${PORT}`,
+]);
 
 const MIME_TYPES = {
   ".html": "text/html; charset=UTF-8",
@@ -140,18 +146,39 @@ const BatchGreeksType = protoRoot.lookupType("nubrafrontend.BatchWebSocketGreeks
 const OptionChainUpdateType = protoRoot.lookupType("nubrafrontend.WebSocketMsgOptionChainUpdate");
 
 const streamStates = new Map();
+const refdataCaches = new Map();
 
-function corsHeaders() {
-  return {
-    "Access-Control-Allow-Origin": "*",
+function normalizeOrigin(value) {
+  const raw = String(value || "").trim();
+  if (!raw || raw === "null") return "";
+  try {
+    const url = new URL(raw);
+    return `${url.protocol}//${url.host}`;
+  } catch (_error) {
+    return "";
+  }
+}
+
+function resolveCorsOrigin(req) {
+  const origin = normalizeOrigin(req?.headers?.origin);
+  return ALLOWED_CORS_ORIGINS.has(origin) ? origin : "";
+}
+
+function corsHeaders(res) {
+  const headers = {
     "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, x-device-id, x-temp-token",
     "Access-Control-Max-Age": "600",
   };
+  if (res?._corsOrigin) {
+    headers["Access-Control-Allow-Origin"] = res._corsOrigin;
+    headers.Vary = "Origin";
+  }
+  return headers;
 }
 
 function logLine(message) {
-  const line = `${new Date().toISOString()} ${message}\n`;
+  const line = `${new Date().toISOString()} ${redactSensitiveText(message)}\n`;
   try {
     fs.appendFileSync(LOG_PATH, line);
   } catch (error) {
@@ -159,8 +186,19 @@ function logLine(message) {
   }
 }
 
+function redactSensitiveText(message) {
+  let text = String(message || "");
+  text = text.replace(/(Bearer\s+)[^\s"']+/gi, "$1[REDACTED]");
+  text = text.replace(/((?:batch_subscribe|batch_unsubscribe)\s+)[^\s]+/gi, "$1[REDACTED]");
+  text = text.replace(
+    /((?:session_token|sessionToken|auth_token|authToken|temp_token|tempToken|x-temp-token|Authorization)\s*[:=]\s*"?)([^",\s]+)/gi,
+    "$1[REDACTED]"
+  );
+  return text;
+}
+
 function writeJson(res, statusCode, payload) {
-  const headers = corsHeaders();
+  const headers = corsHeaders(res);
   headers["Content-Type"] = "application/json; charset=UTF-8";
   res.writeHead(statusCode, headers);
   res.end(JSON.stringify(payload));
@@ -168,6 +206,810 @@ function writeJson(res, statusCode, payload) {
 
 function writeError(res, statusCode, message) {
   writeJson(res, statusCode, { error: message });
+}
+
+function todayIst() {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  } catch (_error) {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+function normalizeExpiryKey(value) {
+  const raw = String(value || "").trim();
+  const digitsOnly = raw.replace(/\D/g, "");
+  if (digitsOnly.length >= 8) return digitsOnly.slice(0, 8);
+  return raw.toUpperCase();
+}
+
+function normalizeOptionType(value) {
+  const token = String(value || "").trim().toUpperCase();
+  if (token === "CE" || token === "CALL" || token === "C") return "CE";
+  if (token === "PE" || token === "PUT" || token === "P") return "PE";
+  return token;
+}
+
+function normalizeStrikeForLookup(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const normalized = Math.abs(n) >= 100000 ? n / 100 : n;
+  return Math.round(normalized * 100) / 100;
+}
+
+function applySignedPriceBuffer(rawPrice, bps = 0, signStyle = "sell_positive") {
+  const raw = Number(rawPrice);
+  const bpsNum = Number(bps || 0);
+  if (!Number.isFinite(raw) || !Number.isFinite(bpsNum) || bpsNum <= 0) return raw;
+  const ratio = bpsNum / 10000;
+  const abs = Math.abs(raw);
+  if (!Number.isFinite(abs) || abs <= 0) return raw;
+  let nextAbs = abs;
+  if (signStyle === "sell_positive") {
+    nextAbs = raw >= 0 ? abs * (1 - ratio) : abs * (1 + ratio);
+  } else {
+    nextAbs = raw >= 0 ? abs * (1 + ratio) : abs * (1 - ratio);
+  }
+  const signed = raw >= 0 ? nextAbs : -nextAbs;
+  return Math.round(signed);
+}
+
+function optionTupleKey(asset, expiry, optionType, strike, exchange) {
+  const assetKey = String(asset || "").trim().toUpperCase();
+  const expiryKey = normalizeExpiryKey(expiry);
+  const optionTypeKey = normalizeOptionType(optionType);
+  const strikeKey = normalizeStrikeForLookup(strike);
+  const exchangeKey = String(exchange || "NSE").trim().toUpperCase();
+  if (!assetKey || !expiryKey || !optionTypeKey || strikeKey === null || !exchangeKey) return "";
+  return `${assetKey}|${expiryKey}|${optionTypeKey}|${strikeKey}|${exchangeKey}`;
+}
+
+function symbolLookupKey(symbol, exchange) {
+  return `${String(symbol || "").trim().toUpperCase()}|${String(exchange || "NSE").trim().toUpperCase()}`;
+}
+
+function exchangeAliasKeys(exchange) {
+  const ex = String(exchange || "NSE").trim().toUpperCase();
+  const set = new Set([ex]);
+  if (ex.includes("NSE") || ex.includes("NFO") || ex.includes("FO")) {
+    set.add("NSE");
+    set.add("NFO");
+    set.add("NSE_FO");
+  }
+  if (ex.includes("BSE") || ex.includes("BFO")) {
+    set.add("BSE");
+    set.add("BFO");
+    set.add("BSE_FO");
+  }
+  return Array.from(set);
+}
+
+const MONTH_CODE_MONTHLY = {
+  1: "JAN",
+  2: "FEB",
+  3: "MAR",
+  4: "APR",
+  5: "MAY",
+  6: "JUN",
+  7: "JUL",
+  8: "AUG",
+  9: "SEP",
+  10: "OCT",
+  11: "NOV",
+  12: "DEC",
+};
+
+function buildOptionCandidateSymbols(asset, expiry, strike, optionType) {
+  const expiryKey = normalizeExpiryKey(expiry);
+  const strikeKey = normalizeStrikeForLookup(strike);
+  const optionTypeKey = normalizeOptionType(optionType);
+  if (!asset || !/^\d{8}$/.test(expiryKey) || strikeKey === null || !optionTypeKey) return [];
+  const year = Number(expiryKey.slice(0, 4));
+  const month = Number(expiryKey.slice(4, 6));
+  const day = Number(expiryKey.slice(6, 8));
+  const yy = String(year).slice(-2);
+  const strikeText = String(Math.trunc(Number(strikeKey)));
+  const monthlyCode = MONTH_CODE_MONTHLY[month];
+  const weekly = `${String(asset).trim().toUpperCase()}${yy}${month}${String(day).padStart(2, "0")}${strikeText}${optionTypeKey}`;
+  const monthly = monthlyCode ? `${String(asset).trim().toUpperCase()}${yy}${monthlyCode}${strikeText}${optionTypeKey}` : "";
+  return Array.from(new Set([weekly, monthly].filter(Boolean)));
+}
+
+function upstreamJsonRequest(targetOrigin, requestPath, options = {}) {
+  return new Promise((resolve, reject) => {
+    const targetUrl = new URL(targetOrigin);
+    const headers = { ...(options.headers || {}) };
+    const reqBody = options.body ? JSON.stringify(options.body) : "";
+    if (reqBody) {
+      headers["Content-Type"] = "application/json";
+      headers["Content-Length"] = Buffer.byteLength(reqBody);
+    }
+
+    const upstream = https.request(
+      {
+        protocol: targetUrl.protocol,
+        hostname: targetUrl.hostname,
+        port: targetUrl.port || 443,
+        method: options.method || "GET",
+        path: requestPath,
+        headers,
+      },
+      (upstreamRes) => {
+        let raw = "";
+        upstreamRes.setEncoding("utf8");
+        upstreamRes.on("data", (chunk) => {
+          raw += chunk;
+        });
+        upstreamRes.on("end", () => {
+          let data = null;
+          try {
+            data = raw ? JSON.parse(raw) : {};
+          } catch (_error) {
+            data = { _raw: raw };
+          }
+          resolve({
+            statusCode: upstreamRes.statusCode || 500,
+            data,
+            raw,
+          });
+        });
+      }
+    );
+
+    upstream.on("error", reject);
+    if (reqBody) upstream.write(reqBody);
+    upstream.end();
+  });
+}
+
+function buildRefdataIndices(items) {
+  const byTuple = new Map();
+  const byTupleNoExchange = new Map();
+  const bySymbol = new Map();
+  for (const item of Array.isArray(items) ? items : []) {
+    const refId = Number(item?.ref_id);
+    if (!Number.isInteger(refId) || refId <= 0) continue;
+    const asset = String(item?.asset || item?.stock_name || "").trim().toUpperCase();
+    const exchange = String(item?.exchange || "NSE").trim().toUpperCase();
+    const expiry = normalizeExpiryKey(item?.expiry || "");
+    const optionType = normalizeOptionType(item?.option_type || "");
+    const strike = normalizeStrikeForLookup(item?.strike_price);
+    const tupleKey = optionTupleKey(asset, expiry, optionType, strike, exchange);
+    const tupleNoExKey = `${asset}|${expiry}|${optionType}|${strike}`;
+    const next = {
+      ref_id: refId,
+      asset,
+      exchange,
+      expiry,
+      option_type: optionType,
+      strike,
+      symbol: String(item?.symbol || "").trim().toUpperCase(),
+      stock_name: String(item?.stock_name || "").trim().toUpperCase(),
+      lot_size: Number(item?.lot_size) || null,
+    };
+    if (tupleKey && !byTuple.has(tupleKey)) byTuple.set(tupleKey, next);
+    if (tupleNoExKey && !byTupleNoExchange.has(tupleNoExKey)) byTupleNoExchange.set(tupleNoExKey, next);
+    const aliases = exchangeAliasKeys(exchange);
+    for (const alias of aliases) {
+      const aliasTuple = optionTupleKey(asset, expiry, optionType, strike, alias);
+      if (aliasTuple && !byTuple.has(aliasTuple)) byTuple.set(aliasTuple, next);
+    }
+    for (const symbol of [next.symbol, next.stock_name]) {
+      if (!symbol) continue;
+      for (const alias of aliases) {
+        const key = symbolLookupKey(symbol, alias);
+        if (!bySymbol.has(key)) bySymbol.set(key, next);
+      }
+    }
+  }
+  return { byTuple, byTupleNoExchange, bySymbol };
+}
+
+function optionRowKey(asset, expiry, exchange, strike, side) {
+  return [
+    String(asset || "").trim().toUpperCase(),
+    normalizeExpiryKey(expiry),
+    String(exchange || "NSE").trim().toUpperCase(),
+    normalizeStrikeForLookup(strike),
+    normalizeOptionType(side),
+  ].join("|");
+}
+
+function ingestOptionEventIntoState(state, eventData) {
+  if (!state?.optionRows || !eventData) return;
+  const base = {
+    asset: String(eventData.asset || "").trim().toUpperCase(),
+    expiry: normalizeExpiryKey(eventData.expiry || ""),
+    exchange: String(eventData.exchange || "NSE").trim().toUpperCase(),
+    atm: asNumber(eventData.atm),
+    cp: asNumber(eventData.cp),
+  };
+  for (const item of eventData.ce || []) {
+    const key = optionRowKey(base.asset, base.expiry, base.exchange, item.sp, "CE");
+    state.optionRows.set(key, { ...base, side: "CE", ...item });
+  }
+  for (const item of eventData.pe || []) {
+    const key = optionRowKey(base.asset, base.expiry, base.exchange, item.sp, "PE");
+    state.optionRows.set(key, { ...base, side: "PE", ...item });
+  }
+}
+
+function optionRowsForSelection(environment, asset, expiry, exchange) {
+  const rows = [];
+  const envKey = String(environment || "UAT").trim().toUpperCase();
+  const assetKey = String(asset || "").trim().toUpperCase();
+  const expiryKey = normalizeExpiryKey(expiry);
+  const exchangeKey = String(exchange || "NSE").trim().toUpperCase();
+  for (const state of streamStates.values()) {
+    if (String(state?.config?.environment || "").trim().toUpperCase() !== envKey) continue;
+    for (const row of state.optionRows?.values?.() || []) {
+      if (String(row.asset || "").trim().toUpperCase() !== assetKey) continue;
+      if (normalizeExpiryKey(row.expiry) !== expiryKey) continue;
+      if (String(row.exchange || "NSE").trim().toUpperCase() !== exchangeKey) continue;
+      rows.push(row);
+    }
+  }
+  return rows;
+}
+
+async function optionRowsFromRestSnapshot(environment, sessionToken, deviceId, asset, expiry, exchange) {
+  const envKey = String(environment || "UAT").trim().toUpperCase();
+  const targetOrigin = PROXY_TARGETS[envKey === "LIVE" ? "/proxy/live" : "/proxy/uat"];
+  const assetKey = String(asset || "").trim().toUpperCase();
+  const expiryKey = normalizeExpiryKey(expiry);
+  const exchangeKey = String(exchange || "NSE").trim().toUpperCase();
+  const path = `/optionchains/${encodeURIComponent(assetKey)}?exchange=${encodeURIComponent(exchangeKey)}&expiry=${encodeURIComponent(expiryKey)}`;
+  const upstream = await upstreamJsonRequest(targetOrigin, path, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${sessionToken}`,
+      "x-device-id": String(deviceId || "").trim(),
+    },
+  });
+  if (upstream.statusCode < 200 || upstream.statusCode >= 300) {
+    const msg = String(upstream.data?.error || upstream.data?.message || upstream.raw || `HTTP ${upstream.statusCode}`).trim();
+    throw new Error(`Option chain fetch failed: ${msg}`);
+  }
+  const chain = upstream.data?.chain || {};
+  const ce = Array.isArray(chain.ce) ? chain.ce : [];
+  const pe = Array.isArray(chain.pe) ? chain.pe : [];
+  const mapLeg = (item, side) => ({
+    asset: assetKey,
+    expiry: expiryKey,
+    exchange: exchangeKey,
+    side,
+    sp: Number(item?.sp),
+    ref_id: Number(item?.ref_id),
+    ltp: Number(item?.ltp),
+    delta: Number(item?.delta),
+    gamma: Number(item?.gamma),
+    theta: Number(item?.theta),
+    vega: Number(item?.vega),
+    oi: Number(item?.oi),
+    volume: Number(item?.volume),
+    ls: Number(item?.ls ?? item?.lot_size),
+    atm: Number(chain?.atm),
+    cp: Number(chain?.cp ?? chain?.price ?? chain?.ltp),
+  });
+  return [
+    ...ce.map((x) => mapLeg(x, "CE")).filter((x) => Number.isFinite(x.sp)),
+    ...pe.map((x) => mapLeg(x, "PE")).filter((x) => Number.isFinite(x.sp)),
+  ];
+}
+
+async function getRefdataCache(environment, sessionToken, date, exchange, deviceId = "") {
+  const envKey = String(environment || "UAT").trim().toUpperCase();
+  const dateKey = String(date || todayIst()).trim();
+  const exchangeKey = String(exchange || "NSE").trim().toUpperCase();
+  const cacheKey = `${envKey}|${dateKey}|${exchangeKey}`;
+  const cached = refdataCaches.get(cacheKey);
+  if (cached && (Date.now() - cached.cachedAt) < 15 * 60 * 1000) {
+    return cached;
+  }
+  const targetOrigin = PROXY_TARGETS[envKey === "LIVE" ? "/proxy/live" : "/proxy/uat"];
+  const requestPath = `/refdata/refdata/${encodeURIComponent(dateKey)}?exchange=${encodeURIComponent(exchangeKey)}`;
+  const upstream = await upstreamJsonRequest(targetOrigin, requestPath, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${sessionToken}`,
+      "x-device-id": deviceId,
+    },
+  });
+  if (upstream.statusCode < 200 || upstream.statusCode >= 300) {
+    const msg = String(upstream.data?.error || upstream.data?.message || upstream.raw || `HTTP ${upstream.statusCode}`).trim();
+    throw new Error(`Refdata fetch failed: ${msg}`);
+  }
+  const items = Array.isArray(upstream.data?.refdata) ? upstream.data.refdata : [];
+  const entry = {
+    cachedAt: Date.now(),
+    environment: envKey,
+    date: dateKey,
+    exchange: exchangeKey,
+    items,
+    ...buildRefdataIndices(items),
+  };
+  refdataCaches.set(cacheKey, entry);
+  return entry;
+}
+
+async function resolveOptionRefs(payload) {
+  const environment = String(payload.environment || "UAT").trim().toUpperCase();
+  const sessionToken = String(payload.sessionToken || "").trim();
+  const deviceId = String(payload.deviceId || "").trim();
+  const asset = String(payload.asset || "").trim().toUpperCase();
+  const expiry = normalizeExpiryKey(payload.expiry || "");
+  const exchange = String(payload.exchange || "NSE").trim().toUpperCase();
+  const date = String(payload.date || todayIst()).trim();
+  const legs = Array.isArray(payload.legs) ? payload.legs : [];
+  const forceResolve = Boolean(payload.force_resolve || payload.forceResolve);
+  if (!sessionToken) throw new Error("sessionToken is required");
+  if (!asset || !expiry) throw new Error("asset and expiry are required");
+  if (!legs.length) return { legs: [], resolved: 0, missing: 0, cacheDate: date };
+
+  const cache = await getRefdataCache(environment, sessionToken, date, exchange, deviceId);
+  const resolvedLegs = legs.map((leg) => {
+    const currentRef = Number(leg?.ref_id);
+    if (!forceResolve && Number.isInteger(currentRef) && currentRef > 0) {
+      return { ...leg, ref_id: currentRef, resolution_source: "input" };
+    }
+    const optionType = normalizeOptionType(leg?.option_type || "");
+    const strike = normalizeStrikeForLookup(leg?.strike ?? leg?.strike_raw);
+    let match = null;
+    let resolutionSource = "";
+    for (const symbolCandidate of buildOptionCandidateSymbols(asset, expiry, strike, optionType)) {
+      for (const exAlias of exchangeAliasKeys(exchange)) {
+        match = cache.bySymbol.get(symbolLookupKey(symbolCandidate, exAlias)) || null;
+        if (match) {
+          resolutionSource = `symbol:${symbolCandidate}`;
+          break;
+        }
+      }
+      if (match) break;
+    }
+    if (!match) {
+      for (const exAlias of exchangeAliasKeys(exchange)) {
+        match = cache.byTuple.get(optionTupleKey(asset, expiry, optionType, strike, exAlias)) || null;
+        if (match) {
+          resolutionSource = "tuple";
+          break;
+        }
+      }
+    }
+    if (!match) {
+      const tupleNoExKey = `${asset}|${expiry}|${optionType}|${strike}`;
+      match = cache.byTupleNoExchange.get(tupleNoExKey) || null;
+      if (match) resolutionSource = "tuple_no_exchange";
+    }
+    return {
+      ...leg,
+      ref_id: match?.ref_id ?? null,
+      lot_size: match?.lot_size ?? leg?.lot_size ?? null,
+      resolved_symbol: match?.symbol || match?.stock_name || "",
+      resolution_source: resolutionSource || "",
+    };
+  });
+
+  const resolved = resolvedLegs.filter((leg) => Number.isInteger(Number(leg.ref_id)) && Number(leg.ref_id) > 0).length;
+  return {
+    cacheDate: cache.date,
+    legs: resolvedLegs,
+    resolved,
+    missing: resolvedLegs.length - resolved,
+  };
+}
+
+function round2(n) {
+  return Math.round(Number(n) * 100) / 100;
+}
+
+function toNumberOrNull(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function toStrategySnapshotFromRows(asset, expiry, exchange, rows) {
+  const calls = [];
+  const puts = [];
+  let atm = null;
+  let currentPrice = null;
+  for (const x of rows || []) {
+    const strikeRaw = Number(x.sp);
+    if (!Number.isFinite(strikeRaw)) continue;
+    const leg = {
+      option_type: normalizeOptionType(x.side),
+      ref_id: Number.isInteger(Number(x.ref_id)) ? Number(x.ref_id) : null,
+      strike: strikeRaw,
+      ltp: toNumberOrNull(x.ltp),
+      delta: toNumberOrNull(x.delta),
+      gamma: toNumberOrNull(x.gamma),
+      theta: toNumberOrNull(x.theta),
+      vega: toNumberOrNull(x.vega),
+      oi: toNumberOrNull(x.oi),
+      vol: toNumberOrNull(x.volume),
+      lot_size: Number.isFinite(Number(x.ls)) ? Number(x.ls) : null,
+    };
+    if (normalizeOptionType(x.side) === "CE") calls.push(leg);
+    if (normalizeOptionType(x.side) === "PE") puts.push(leg);
+    if (atm === null && Number.isFinite(Number(x.atm))) atm = Number(x.atm);
+    if (currentPrice === null && Number.isFinite(Number(x.cp))) currentPrice = Number(x.cp);
+    if (currentPrice === null && Number.isFinite(Number(x.price_pcp))) currentPrice = Number(x.price_pcp);
+  }
+  if (!calls.length && !puts.length) return null;
+  return {
+    asset: String(asset || "").trim().toUpperCase(),
+    expiry: normalizeExpiryKey(expiry),
+    exchange: String(exchange || "NSE").trim().toUpperCase(),
+    atm,
+    current_price: currentPrice,
+    calls,
+    puts,
+  };
+}
+
+function snapshotCenter(snapshot) {
+  if (Number.isFinite(snapshot?.atm)) return snapshot.atm;
+  if (Number.isFinite(snapshot?.current_price)) return snapshot.current_price;
+  const strikes = Array.from(new Set([...(snapshot?.calls || []), ...(snapshot?.puts || [])]
+    .map((leg) => Number(leg.strike))
+    .filter(Number.isFinite))).sort((a, b) => a - b);
+  if (!strikes.length) return null;
+  return strikes[Math.floor(strikes.length / 2)];
+}
+
+function selectStraddle(snapshot) {
+  const center = snapshotCenter(snapshot);
+  if (!Number.isFinite(center)) return null;
+  let callsByStrike = new Map((snapshot.calls || []).filter((leg) => leg.delta !== null).map((leg) => [leg.strike, leg]));
+  let putsByStrike = new Map((snapshot.puts || []).filter((leg) => leg.delta !== null).map((leg) => [leg.strike, leg]));
+  if (!callsByStrike.size || !putsByStrike.size) {
+    callsByStrike = new Map((snapshot.calls || []).map((leg) => [leg.strike, leg]));
+    putsByStrike = new Map((snapshot.puts || []).map((leg) => [leg.strike, leg]));
+  }
+  const strikes = Array.from(callsByStrike.keys()).filter((strike) => putsByStrike.has(strike));
+  if (!strikes.length) return null;
+  const nearest = strikes.reduce((best, strike) => (best === null || Math.abs(strike - center) < Math.abs(best - center) ? strike : best), null);
+  if (!Number.isFinite(nearest)) return null;
+  return [callsByStrike.get(nearest), putsByStrike.get(nearest)];
+}
+
+function selectStrangle(snapshot, targetDelta, tolerance = 0.05) {
+  const center = snapshotCenter(snapshot);
+  if (!Number.isFinite(center)) return [];
+  const calls = (snapshot.calls || []).filter((leg) => leg.delta !== null && leg.strike >= center).sort((a, b) => a.strike - b.strike);
+  const puts = (snapshot.puts || []).filter((leg) => leg.delta !== null && leg.strike <= center).sort((a, b) => b.strike - a.strike);
+  if (!calls.length || !puts.length) {
+    const fallbackCalls = (snapshot.calls || []).filter((leg) => leg.strike > center).sort((a, b) => a.strike - b.strike);
+    const fallbackPuts = (snapshot.puts || []).filter((leg) => leg.strike < center).sort((a, b) => b.strike - a.strike);
+    return fallbackCalls.length && fallbackPuts.length ? [[fallbackCalls[0], fallbackPuts[0]]] : [];
+  }
+  const usedPutIndices = new Set();
+  const pairs = [];
+  for (const call of calls) {
+    const callDelta = Math.abs(Number(call.delta));
+    for (let j = 0; j < puts.length; j += 1) {
+      if (usedPutIndices.has(j)) continue;
+      const putDelta = -Math.abs(Number(puts[j].delta));
+      const netDelta = -callDelta - putDelta;
+      if (Math.abs(netDelta - targetDelta) <= tolerance) {
+        pairs.push([call, puts[j]]);
+        usedPutIndices.add(j);
+        break;
+      }
+    }
+  }
+  return pairs;
+}
+
+function selectIronButterfly(snapshot, targetDelta) {
+  const atmPair = selectStraddle(snapshot);
+  if (!atmPair) return [];
+  const [atmCall, atmPut] = atmPair;
+  const atmStrike = atmCall.strike;
+  const otmCalls = (snapshot.calls || []).filter((leg) => leg.delta !== null && leg.strike > atmStrike);
+  const otmPuts = (snapshot.puts || []).filter((leg) => leg.delta !== null && leg.strike < atmStrike);
+  if (!otmCalls.length || !otmPuts.length) {
+    const fallbackCalls = (snapshot.calls || []).filter((leg) => leg.strike > atmStrike).sort((a, b) => a.strike - b.strike);
+    const fallbackPuts = (snapshot.puts || []).filter((leg) => leg.strike < atmStrike).sort((a, b) => b.strike - a.strike);
+    return fallbackCalls.length && fallbackPuts.length ? [[atmCall, atmPut], [fallbackCalls[0], fallbackPuts[0]]] : [];
+  }
+  let best = null;
+  for (const call of otmCalls) {
+    for (const put of otmPuts) {
+      const atmCallDelta = atmCall.delta !== null ? Math.abs(Number(atmCall.delta)) : 0;
+      const atmPutDelta = atmPut.delta !== null ? -Math.abs(Number(atmPut.delta)) : 0;
+      const callDelta = Math.abs(Number(call.delta));
+      const putDelta = -Math.abs(Number(put.delta));
+      const total = (-atmCallDelta - atmPutDelta) + (callDelta + putDelta);
+      const diff = Math.abs(total - Number(targetDelta));
+      if (!best || diff < best.diff) best = { diff, call, put };
+    }
+  }
+  return best ? [[atmCall, atmPut], [best.call, best.put]] : [];
+}
+
+function selectIronCondor(snapshot, targetDelta) {
+  const center = snapshotCenter(snapshot);
+  if (!Number.isFinite(center)) return [];
+  const shortCalls = (snapshot.calls || []).filter((leg) => leg.delta !== null && leg.strike > center).sort((a, b) => a.strike - b.strike);
+  const shortPuts = (snapshot.puts || []).filter((leg) => leg.delta !== null && leg.strike < center).sort((a, b) => b.strike - a.strike);
+  if (!shortCalls.length || !shortPuts.length) {
+    const fallbackShortCalls = (snapshot.calls || []).filter((leg) => leg.strike > center).sort((a, b) => a.strike - b.strike);
+    const fallbackShortPuts = (snapshot.puts || []).filter((leg) => leg.strike < center).sort((a, b) => b.strike - a.strike);
+    if (!fallbackShortCalls.length || !fallbackShortPuts.length) return [];
+    const shortCall = fallbackShortCalls[0];
+    const shortPut = fallbackShortPuts[0];
+    const longCalls = fallbackShortCalls.filter((leg) => leg.strike > shortCall.strike);
+    const longPuts = fallbackShortPuts.filter((leg) => leg.strike < shortPut.strike);
+    return longCalls.length && longPuts.length ? [[shortCall, shortPut], [longCalls[0], longPuts[0]]] : [];
+  }
+  let best = null;
+  for (const shortCall of shortCalls) {
+    const longCalls = (snapshot.calls || []).filter((leg) => leg.delta !== null && leg.strike > shortCall.strike);
+    for (const shortPut of shortPuts) {
+      const longPuts = (snapshot.puts || []).filter((leg) => leg.delta !== null && leg.strike < shortPut.strike);
+      for (const longCall of longCalls) {
+        for (const longPut of longPuts) {
+          const total = (-Math.abs(Number(shortCall.delta)) - (-Math.abs(Number(shortPut.delta))))
+            + (Math.abs(Number(longCall.delta)) + (-Math.abs(Number(longPut.delta))));
+          const diff = Math.abs(total - Number(targetDelta));
+          if (!best || diff < best.diff) best = { diff, shortCall, shortPut, longCall, longPut };
+        }
+      }
+    }
+  }
+  return best ? [[best.shortCall, best.shortPut], [best.longCall, best.longPut]] : [];
+}
+
+function pairGroups(strategy, pairs) {
+  if (strategy === "iron_butterfly" || strategy === "iron_condor") {
+    return pairs.length ? [pairs] : [];
+  }
+  return pairs.map((pair) => [pair]);
+}
+
+function computeStrategyGreeks(snapshot, legs) {
+  const callMap = new Map((snapshot.calls || []).map((leg) => [leg.strike, leg]));
+  const putMap = new Map((snapshot.puts || []).map((leg) => [leg.strike, leg]));
+  const totals = { delta: 0, gamma: 0, theta: 0, vega: 0, ltp: 0 };
+  const seen = { delta: false, gamma: false, theta: false, vega: false, ltp: false };
+  for (const legSpec of legs || []) {
+    const side = String(legSpec.side || "SELL").trim().toUpperCase();
+    const optionType = normalizeOptionType(legSpec.option_type || "");
+    const strike = Number(legSpec.strike_raw || (Number(legSpec.strike) * 100));
+    const liveLeg = optionType === "CE" ? callMap.get(strike) : putMap.get(strike);
+    if (!liveLeg) continue;
+    const position = side === "BUY" ? 1 : -1;
+    if (liveLeg.delta !== null) {
+      const signedDelta = optionType === "CE" ? Math.abs(Number(liveLeg.delta)) : -Math.abs(Number(liveLeg.delta));
+      totals.delta += position * signedDelta;
+      seen.delta = true;
+    }
+    for (const key of ["gamma", "theta", "vega", "ltp"]) {
+      if (liveLeg[key] !== null) {
+        totals[key] += position * Number(liveLeg[key]);
+        seen[key] = true;
+      }
+    }
+  }
+  return Object.fromEntries(Object.keys(totals).map((key) => [key, seen[key] ? totals[key] : null]));
+}
+
+function buildStrategyPayload(strategy, targetDelta, groups, pairNumber, snapshot) {
+  let targetGroups = groups;
+  if (Number.isInteger(pairNumber) && pairNumber > 0) {
+    if (pairNumber > groups.length) throw new Error(`Pair number must be between 1 and ${groups.length}.`);
+    targetGroups = [groups[pairNumber - 1]];
+  }
+  const legs = [];
+  const seen = new Set();
+  for (const group of targetGroups) {
+    for (let groupIdx = 0; groupIdx < group.length; groupIdx += 1) {
+      const [callLeg, putLeg] = group[groupIdx];
+      const side = strategy === "iron_butterfly" || strategy === "iron_condor"
+        ? (groupIdx === 0 ? "SELL" : "BUY")
+        : "SELL";
+      const entries = [
+        { side, option_type: "CE", leg: callLeg },
+        { side, option_type: "PE", leg: putLeg },
+      ];
+      for (const entry of entries) {
+        const key = `${entry.option_type}|${entry.leg.ref_id ?? entry.leg.strike}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        legs.push({
+          side: entry.side,
+          option_type: entry.option_type,
+          ref_id: entry.leg.ref_id,
+          strike_raw: Number(entry.leg.strike),
+          strike: round2(Number(entry.leg.strike) / 100),
+          lot_size: entry.leg.lot_size ?? null,
+          ltp: entry.leg.ltp ?? null,
+          delta: entry.leg.delta ?? null,
+          gamma: entry.leg.gamma ?? null,
+          theta: entry.leg.theta ?? null,
+          vega: entry.leg.vega ?? null,
+        });
+      }
+    }
+  }
+  const baseline = computeStrategyGreeks(snapshot, legs);
+  const strategySlug = String(strategy || "strategy").replace(/[^a-z0-9_]+/gi, "_").toLowerCase();
+  const ts = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "T");
+  const unique = Math.random().toString(16).slice(2, 8);
+  const tagBase = `${strategySlug}_${ts}_${unique}`;
+  return {
+    symbol: `${snapshot.asset}:${snapshot.expiry}`,
+    asset: snapshot.asset,
+    expiry: snapshot.expiry,
+    strategy,
+    target_delta: Number(targetDelta),
+    pair_number: Number.isInteger(pairNumber) && pairNumber > 0 ? pairNumber : null,
+    selected_at: new Date().toISOString(),
+    baseline_greeks: baseline,
+    strategy_tag_base: tagBase,
+    entry_tag: `${tagBase}_entry`,
+    exit_tag: `${tagBase}_exit`,
+    order_qty: null,
+    legs,
+  };
+}
+
+async function buildStrategyFromLivePayload(payload) {
+  const environment = String(payload.environment || "UAT").trim().toUpperCase();
+  const asset = String(payload.asset || "").trim().toUpperCase();
+  const expiry = normalizeExpiryKey(payload.expiry || "");
+  const exchange = String(payload.exchange || "NSE").trim().toUpperCase();
+  const strategy = String(payload.strategy || "strangle").trim().toLowerCase();
+  const targetDelta = Number(payload.target_delta ?? payload.targetDelta ?? 0);
+  const pairNumberRaw = payload.pair_number ?? payload.pairNumber;
+  const pairNumber = pairNumberRaw === "" || pairNumberRaw === null || pairNumberRaw === undefined ? null : Number(pairNumberRaw);
+  let rows = optionRowsForSelection(environment, asset, expiry, exchange);
+  if (!rows.length) {
+    rows = await optionRowsFromRestSnapshot(
+      environment,
+      String(payload.sessionToken || "").trim(),
+      String(payload.deviceId || "").trim(),
+      asset,
+      expiry,
+      exchange
+    ).catch(() => []);
+  }
+  if (!rows.length) throw new Error("No live option chain snapshot found for the selected asset/expiry/exchange.");
+  const snapshot = toStrategySnapshotFromRows(asset, expiry, exchange, rows);
+  if (!snapshot) throw new Error("No live option chain snapshot found for the selected asset/expiry/exchange.");
+  let pairs = [];
+  if (strategy === "straddle") {
+    const pair = selectStraddle(snapshot);
+    pairs = pair ? [pair] : [];
+  } else if (strategy === "strangle") {
+    pairs = selectStrangle(snapshot, targetDelta, 0.05);
+  } else if (strategy === "iron_butterfly") {
+    pairs = selectIronButterfly(snapshot, targetDelta);
+  } else if (strategy === "iron_condor") {
+    pairs = selectIronCondor(snapshot, targetDelta);
+  } else {
+    throw new Error(`Unsupported strategy '${strategy}' in backend deploy route.`);
+  }
+  const groups = pairGroups(strategy, pairs);
+  if (!groups.length) throw new Error("No strategy legs found for this selection.");
+  const payloadOut = buildStrategyPayload(strategy, targetDelta, groups, Number.isInteger(pairNumber) ? pairNumber : null, snapshot);
+  const hasMissingRefs = (payloadOut.legs || []).some((leg) => !Number.isInteger(Number(leg?.ref_id)) || Number(leg.ref_id) <= 0);
+  let resolved = { resolved: payloadOut.legs.length, missing: 0, cacheDate: todayIst(), legs: payloadOut.legs };
+  if (hasMissingRefs) {
+    resolved = await resolveOptionRefs({
+      environment,
+      sessionToken: payload.sessionToken,
+      deviceId: payload.deviceId,
+      asset,
+      expiry,
+      exchange,
+      date: todayIst(),
+      legs: payloadOut.legs,
+    });
+    payloadOut.legs = resolved.legs;
+  }
+  return {
+    environment,
+    generated_at_ist: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+    source: { asset, expiry, exchange, live_rows: rows.length },
+    strategy,
+    target_delta: targetDelta,
+    group_count: groups.length,
+    payload: payloadOut,
+    resolution: { resolved: resolved.resolved, missing: resolved.missing },
+  };
+}
+
+async function deployStrategyFromLivePayload(payload) {
+  const orderEnvironment = String(payload.environment || "UAT").trim().toUpperCase();
+  const dataEnvironment = String(payload.data_environment || "LIVE").trim().toUpperCase();
+  const asset = String(payload.asset || "").trim().toUpperCase();
+  const expiry = normalizeExpiryKey(payload.expiry || "");
+  const exchange = String(payload.exchange || "NSE").trim().toUpperCase();
+  const preview = await buildStrategyFromLivePayload({
+    ...payload,
+    environment: dataEnvironment,
+    sessionToken: String(payload.dataSessionToken || payload.sessionToken || "").trim(),
+  });
+  // Re-resolve refs in order environment (UAT) because ref_id can differ between LIVE and UAT.
+  const orderResolved = await resolveOptionRefs({
+    environment: orderEnvironment,
+    sessionToken: String(payload.sessionToken || "").trim(),
+    deviceId: String(payload.deviceId || "").trim(),
+    asset,
+    expiry,
+    exchange,
+    date: todayIst(),
+    force_resolve: true,
+    legs: Array.isArray(preview?.payload?.legs) ? preview.payload.legs : [],
+  });
+  if (Number(orderResolved?.missing || 0) > 0) {
+    throw new Error(`Unable to resolve ${orderResolved.missing} leg ref_id(s) in ${orderEnvironment}.`);
+  }
+  if (Array.isArray(orderResolved?.legs) && orderResolved.legs.length) {
+    preview.payload.legs = orderResolved.legs;
+  }
+  const orderQty = Number(payload.order_qty ?? payload.requested_order_qty);
+  if (!Number.isInteger(orderQty) || orderQty <= 0) {
+    throw new Error("Requested order quantity must be a positive integer.");
+  }
+  const missing = (preview.payload.legs || []).filter((leg) => !Number.isInteger(Number(leg.ref_id)) || Number(leg.ref_id) <= 0).length;
+  if (missing > 0) throw new Error(`Unable to resolve ${missing} tracked leg ref_id(s) from broker refdata.`);
+  const entryPriceRaw = (preview.payload.legs || []).reduce((sum, leg) => {
+    const ltp = Number(leg.ltp);
+    if (!Number.isFinite(ltp)) return sum;
+    return sum + (String(leg.side || "").toUpperCase() === "SELL" ? ltp : -ltp);
+  }, 0);
+  const entryBufferBps = Number(payload.entry_ltp_buffer_bps || 0);
+  const entryPriceBuffered = Number.isFinite(entryPriceRaw)
+    ? applySignedPriceBuffer(entryPriceRaw, entryBufferBps, "sell_positive")
+    : null;
+  const basketBody = {
+    exchange: preview.source.exchange,
+    basket_name: `Dashboard_${preview.strategy}`,
+    tag: preview.payload.entry_tag,
+    orders: (preview.payload.legs || []).map((leg) => ({
+      ref_id: Number(leg.ref_id),
+      order_qty: orderQty,
+      order_side: String(leg.side || "").toUpperCase() === "BUY" ? "ORDER_SIDE_BUY" : "ORDER_SIDE_SELL",
+    })),
+    basket_params: {
+      order_side: "ORDER_SIDE_BUY",
+      order_delivery_type: String(payload.delivery_type || "ORDER_DELIVERY_TYPE_CNC"),
+      price_type: String(payload.price_type || "LIMIT").toUpperCase(),
+      multiplier: Number(payload.multiplier || 1),
+      entry_price: Number.isFinite(entryPriceBuffered) ? entryPriceBuffered : undefined,
+    },
+  };
+  if (!Number.isFinite(Number(basketBody.basket_params.entry_price))) {
+    delete basketBody.basket_params.entry_price;
+  }
+  const targetOrigin = PROXY_TARGETS[orderEnvironment === "LIVE" ? "/proxy/live" : "/proxy/uat"];
+  const upstream = await upstreamJsonRequest(targetOrigin, "/orders/v2/basket", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${payload.sessionToken}`,
+      "x-device-id": String(payload.deviceId || "").trim(),
+    },
+    body: basketBody,
+  });
+  if (upstream.statusCode < 200 || upstream.statusCode >= 300) {
+    const msg = String(upstream.data?.error || upstream.data?.message || upstream.raw || `HTTP ${upstream.statusCode}`).trim();
+    throw new Error(msg || "Basket deploy failed.");
+  }
+  return {
+    order_environment: orderEnvironment,
+    data_environment: preview.environment,
+    preview,
+    flexi_order_request: basketBody,
+    response: upstream.data,
+    basket_id: upstream.data?.basket_id ?? upstream.data?.basketId ?? upstream.data?.id ?? null,
+  };
 }
 
 function resolveStaticPath(urlPath) {
@@ -202,7 +1044,7 @@ function serveStatic(req, res) {
   }
 
   const extension = path.extname(finalPath).toLowerCase();
-  const headers = corsHeaders();
+  const headers = corsHeaders(res);
   headers["Content-Type"] = MIME_TYPES[extension] || "application/octet-stream";
   res.writeHead(200, headers);
   fs.createReadStream(finalPath).pipe(res);
@@ -235,7 +1077,7 @@ function proxyRequest(req, res, prefix, targetOrigin) {
     delete responseHeaders["access-control-allow-credentials"];
     delete responseHeaders["access-control-allow-headers"];
     delete responseHeaders["access-control-allow-methods"];
-    const mergedHeaders = { ...responseHeaders, ...corsHeaders() };
+    const mergedHeaders = { ...responseHeaders, ...corsHeaders(res) };
     res.writeHead(upstreamRes.statusCode || 500, mergedHeaders);
     upstreamRes.pipe(res);
     logLine(
@@ -269,12 +1111,17 @@ function ensureStreamState(streamId) {
       config: null,
       ws: null,
       clients: new Set(),
+      optionRows: new Map(),
       reconnectTimer: null,
       orphanTimer: null,
       retryCount: 0,
       status: "idle",
       manualStop: false,
       stopReason: "",
+      lastMessageAt: 0,
+      connectOpenedAt: 0,
+      textMessageCount: 0,
+      emptyCloseCount: 0,
     };
     streamStates.set(streamId, state);
   }
@@ -649,6 +1496,7 @@ function mergeConfig(baseConfig, patchConfig) {
     streamId: patch.streamId || base.streamId || "",
     environment: patch.environment || base.environment || "UAT",
     sessionToken: patch.sessionToken || base.sessionToken || "",
+    marketWsUrl: patch.marketWsUrl || base.marketWsUrl || "",
     autoReconnect: patch.autoReconnect !== undefined ? patch.autoReconnect : base.autoReconnect !== false,
     postMarket: patch.postMarket !== undefined ? patch.postMarket : base.postMarket,
     index: base.index ? { ...base.index } : null,
@@ -801,29 +1649,9 @@ function resolvePostMarketMode(requestedPostMarket) {
 
 function buildWsCommands(config, options = {}) {
   const action = options.action === "unsubscribe" ? "batch_unsubscribe" : "batch_subscribe";
-  const includeSettings = options.includeSettings !== false;
-  const token = config.sessionToken;
+  const token = String(config.sessionToken || "").trim();
   const commands = [];
-
-  if (includeSettings && config.postMarket !== undefined) {
-    commands.push(`batch_subscribe ${token} post_market ${config.postMarket ? "true" : "false"}`);
-  }
-
-  if (includeSettings && config.orderbook && Number.isInteger(config.orderbook.depth)) {
-    commands.push(`batch_subscribe ${token} orderbook_depth ${config.orderbook.depth}`);
-  }
-
-  if (includeSettings && config.index && config.index.interval) {
-    commands.push(`batch_subscribe ${token} socket_interval index ${config.index.interval}`);
-  }
-
-  if (includeSettings && config.option && config.option.interval) {
-    commands.push(`batch_subscribe ${token} socket_interval option ${config.option.interval}`);
-  }
-
-  if (includeSettings && config.orderbook && config.orderbook.interval) {
-    commands.push(`batch_subscribe ${token} socket_interval orderbook ${config.orderbook.interval}`);
-  }
+  if (!token) return commands;
 
   if (config.index && Array.isArray(config.index.symbols) && config.index.symbols.length > 0) {
     const payload = { indexes: config.index.symbols };
@@ -850,9 +1678,17 @@ function buildWsCommands(config, options = {}) {
 
 function connectWs(state) {
   const config = state.config;
-  const wsUrl = WS_TARGETS[config.environment];
+  const wsUrl = String(config.marketWsUrl || WS_TARGETS[config.environment] || "").trim();
   if (!wsUrl) {
     broadcastSse(state, { type: "status", status: "error", message: "Unsupported environment" });
+    return;
+  }
+
+  if (state.reconnectTimer) {
+    clearTimeout(state.reconnectTimer);
+    state.reconnectTimer = null;
+  }
+  if (state.ws && (state.ws.readyState === WebSocket.OPEN || state.ws.readyState === WebSocket.CONNECTING)) {
     return;
   }
 
@@ -863,10 +1699,19 @@ function connectWs(state) {
   const ws = new WebSocket(wsUrl);
   ws.binaryType = "arraybuffer";
   state.ws = ws;
+  state.lastMessageAt = 0;
+  state.connectOpenedAt = 0;
+  state.textMessageCount = 0;
+  logLine(`[WS:${state.streamId}] CONNECT ${wsUrl}`);
 
   ws.onopen = () => {
     state.status = "connected";
     state.retryCount = 0;
+    state.connectOpenedAt = Date.now();
+    if (state.reconnectTimer) {
+      clearTimeout(state.reconnectTimer);
+      state.reconnectTimer = null;
+    }
     broadcastSse(state, { type: "status", status: "connected", streamId: state.streamId });
     const commands = buildWsCommands(config);
     for (const command of commands) {
@@ -879,6 +1724,8 @@ function connectWs(state) {
     if (typeof event.data === "string") {
       const text = event.data.trim();
       if (text) {
+        state.lastMessageAt = Date.now();
+        state.textMessageCount += 1;
         logLine(`[WS:${state.streamId}] TEXT ${text.slice(0, 300)}`);
       }
       broadcastSse(state, { type: "text", data: text, streamId: state.streamId });
@@ -911,6 +1758,7 @@ function connectWs(state) {
     }
 
     const decodedEvents = decodeNubraPacket(raw);
+    state.lastMessageAt = Date.now();
     if (decodedEvents.length > 0) {
       const typeCounts = decodedEvents.reduce((acc, x) => {
         const k = String(x.type || "unknown");
@@ -926,6 +1774,9 @@ function connectWs(state) {
       logLine(`[WS:${state.streamId}] DECODE_ISSUE ${JSON.stringify(decodedEvents).slice(0, 600)}`);
     }
     for (const decoded of decodedEvents) {
+      if (decoded.type === "option") {
+        ingestOptionEventIntoState(state, decoded.data);
+      }
       broadcastSse(state, {
         ...decoded,
         streamId: state.streamId,
@@ -938,14 +1789,44 @@ function connectWs(state) {
     broadcastSse(state, { type: "status", status: "error", streamId: state.streamId });
   };
 
-  ws.onclose = () => {
+  ws.onclose = (code, reasonBuffer) => {
     state.ws = null;
     const wasManual = state.manualStop;
     state.status = wasManual ? state.stopReason || "stopped" : "closed";
     state.stopReason = "";
-    broadcastSse(state, { type: "status", status: state.status, streamId: state.streamId });
+    const codeNum = Number.isFinite(Number(code)) ? Number(code) : 0;
+    const reason = Buffer.isBuffer(reasonBuffer)
+      ? reasonBuffer.toString("utf8")
+      : String(reasonBuffer || "");
+    const aliveMs = state.connectOpenedAt > 0 ? Math.max(0, Date.now() - state.connectOpenedAt) : 0;
+    const likelyHandshakeOnly = !wasManual && state.lastMessageAt > 0 && state.textMessageCount > 0 && aliveMs < 3000;
+    if (likelyHandshakeOnly) {
+      state.emptyCloseCount += 1;
+    } else {
+      state.emptyCloseCount = 0;
+    }
+    logLine(
+      `[WS:${state.streamId}] CLOSED manual=${wasManual} retry=${state.retryCount} code=${codeNum} reason=${JSON.stringify(reason)}`
+    );
+    broadcastSse(state, {
+      type: "status",
+      status: state.status,
+      streamId: state.streamId,
+      closeCode: codeNum,
+      closeReason: reason,
+    });
 
     if (!wasManual && config.autoReconnect !== false) {
+      if (state.emptyCloseCount >= 3) {
+        logLine(`[WS:${state.streamId}] reconnect suppressed after ${state.emptyCloseCount} handshake-only closes; relying on HTTP fallback.`);
+        broadcastSse(state, {
+          type: "status",
+          status: "closed",
+          streamId: state.streamId,
+          fallback: true,
+        });
+        return;
+      }
       state.retryCount += 1;
       const delayMs = Math.min(30000, Math.max(1000, 1000 * state.retryCount));
       if (state.reconnectTimer) {
@@ -1052,7 +1933,7 @@ async function routeWsApi(req, res, urlObj) {
       clearTimeout(state.orphanTimer);
       state.orphanTimer = null;
     }
-    const headers = corsHeaders();
+    const headers = corsHeaders(res);
     headers["Content-Type"] = "text/event-stream";
     headers["Cache-Control"] = "no-cache";
     headers.Connection = "keep-alive";
@@ -1103,6 +1984,7 @@ async function routeWsApi(req, res, urlObj) {
       streamId,
       environment,
       sessionToken,
+      marketWsUrl: String(payload.marketWsUrl || "").trim(),
       autoReconnect: payload.autoReconnect !== false,
       postMarket: mode.postMarket,
       index: normalizeIndexConfig(payload.index),
@@ -1171,7 +2053,6 @@ async function routeWsApi(req, res, urlObj) {
 
     const commands = buildWsCommands(commandConfig, {
       action,
-      includeSettings: action === "subscribe",
     });
     for (const command of commands) {
       state.ws.send(command);
@@ -1231,17 +2112,62 @@ async function routeWsApi(req, res, urlObj) {
   return false;
 }
 
+async function routeLocalApi(req, res, urlObj) {
+  const pathnameRaw = urlObj.pathname || "/";
+  const pathname = pathnameRaw.length > 1 ? pathnameRaw.replace(/\/+$/, "") : pathnameRaw;
+  const method = String(req.method || "GET").toUpperCase();
+
+  if (pathname === "/api/refdata/resolve-options" && method === "POST") {
+    const payload = await readJsonBody(req);
+    try {
+      const resolved = await resolveOptionRefs(payload);
+      writeJson(res, 200, { ok: true, ...resolved });
+    } catch (error) {
+      writeError(res, 400, error.message || String(error));
+    }
+    return true;
+  }
+
+  if (pathname === "/api/strategy/preview" && method === "POST") {
+    const payload = await readJsonBody(req);
+    try {
+      const preview = await buildStrategyFromLivePayload(payload);
+      writeJson(res, 200, { ok: true, ...preview });
+    } catch (error) {
+      writeError(res, 400, error.message || String(error));
+    }
+    return true;
+  }
+
+  if (pathname === "/api/strategy/deploy" && method === "POST") {
+    const payload = await readJsonBody(req);
+    try {
+      const result = await deployStrategyFromLivePayload(payload);
+      writeJson(res, 200, { ok: true, ...result });
+    } catch (error) {
+      writeError(res, 400, error.message || String(error));
+    }
+    return true;
+  }
+
+  return false;
+}
+
 async function requestHandler(req, res) {
   logLine(`[REQ] ${req.method} ${req.url}`);
   try {
+    res._corsOrigin = resolveCorsOrigin(req);
     if (req.method === "OPTIONS") {
-      res.writeHead(204, corsHeaders());
+      res.writeHead(204, corsHeaders(res));
       res.end();
       return;
     }
 
     const urlObj = new URL(req.url || "/", "https://localhost");
     if (await routeWsApi(req, res, urlObj)) {
+      return;
+    }
+    if (await routeLocalApi(req, res, urlObj)) {
       return;
     }
     if (routeProxy(req, res)) {
@@ -1278,8 +2204,9 @@ function main() {
     }
   );
 
-  server.listen(PORT, "0.0.0.0", () => {
+  server.listen(PORT, LOOPBACK_HOST, () => {
     console.log(`Nubra Excel dev server running: https://localhost:${PORT}`);
+    console.log("Bind host:", LOOPBACK_HOST);
     console.log("Static root:", ROOT_DIR);
     console.log("REST proxy LIVE -> https://api.nubra.io");
     console.log("REST proxy UAT  -> https://uatapi.nubra.io");
