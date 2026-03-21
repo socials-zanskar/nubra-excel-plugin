@@ -3,6 +3,14 @@
 ## Version
 Current version: `1.0.0`
 
+## Current Build Highlights
+This repository version includes the order placement and UAT trading work now present in the plugin:
+- Single order placement flow from the Excel task pane
+- Order strategy preview and tracking
+- UAT basket deploy flow
+- UAT square-off and basket monitoring flow
+- Supporting worksheet projection for order/strategy state
+
 ## Purpose
 The Nubra Excel Plugin is a Microsoft Excel Office Add-in developed on behalf of Nubra to provide authenticated market access and live trading data directly inside Excel.
 
@@ -99,6 +107,15 @@ If development setup stops with missing command errors:
 - `start-all.ps1`: starts server and sideloads into Excel using bundled or system Node
 - `stop-all.ps1`: unregisters add-in and stops local server process
 - `build-distribution.ps1`: creates a shippable folder/zip with runtime + dependencies
+
+## Why The `.exe` Is Not In Git
+`NubraExcelLauncher.exe` is treated as a generated distribution artifact, not as source.
+
+That means:
+- the Git repo stores the launcher source/scripts and the build flow
+- the packaged `.exe` is produced during distribution build
+- we avoid committing compiled release binaries directly in the repo root
+- the release bundle is created from the project when needed instead of versioning local build outputs
 
 ## One-Time Setup
 Run once on a new machine:
