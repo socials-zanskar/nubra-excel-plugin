@@ -202,6 +202,16 @@
     return round2(n / 100);
   }
 
+  function showInfoPopup(message) {
+    const text = clean(message);
+    if (!text) return;
+    try {
+      window.alert(text);
+    } catch (_e) {
+      // Ignore popup failures and rely on the status log.
+    }
+  }
+
   function setActivePage(pageKey) {
     currentPage = PAGE_META[pageKey] ? pageKey : PAGE.master;
     if (!U) return;
@@ -6662,6 +6672,26 @@
     return dt.toISOString();
   }
 
+  function parseYmdDate(dateStr) {
+    const d = clean(dateStr);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+    const dt = new Date(`${d}T00:00:00+05:30`);
+    return Number.isFinite(dt.getTime()) ? dt : null;
+  }
+
+  function isIntradayHistoricalInterval(interval) {
+    return ["1s", "1m", "2m", "3m", "5m", "15m", "30m", "1h"].includes(clean(interval));
+  }
+
+  function intradayLookbackExceeded(startDate, endDate) {
+    const start = parseYmdDate(startDate);
+    const end = parseYmdDate(endDate);
+    if (!start || !end) return false;
+    const minStart = new Date(end.getTime());
+    minStart.setMonth(minStart.getMonth() - 3);
+    return start.getTime() < minStart.getTime();
+  }
+
   function buildHistoricalRows(payload, symbol) {
     const target = upper(symbol);
     const result = Array.isArray(payload?.result) ? payload.result : [];
@@ -6784,6 +6814,12 @@
       throw new Error(`Unsupported interval "${interval}". Allowed: ${Array.from(allowed).join(", ")}`);
     }
 
+    if (isIntradayHistoricalInterval(interval) && intradayLookbackExceeded(startDate, endDate)) {
+      const msg = "Intervals below 1d are available for up to 3 months only. Reduce the date range or switch to 1d, 1w, or 1mt for longer history.";
+      showInfoPopup(msg);
+      throw new Error(msg);
+    }
+
     if (interval !== "1s") return;
 
     if (env() !== "LIVE") {
@@ -6823,7 +6859,7 @@
           exchange,
           type,
           values: [symbol],
-          fields: ["open", "high", "low", "close", "volume"],
+          fields: ["open", "high", "low", "close", "cumulative_volume"],
           startDate: istDateToUtcIso(startDate, false),
           endDate: istDateToUtcIso(endDate, true),
           interval,
