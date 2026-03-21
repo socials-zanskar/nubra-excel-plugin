@@ -1,7 +1,7 @@
 # Nubra Excel Plugin
 
 ## Version
-Current version: `1.0.0`
+Current version: `Version 2`
 
 ## Current Build Highlights
 This repository version includes the order placement and UAT trading work now present in the plugin:
