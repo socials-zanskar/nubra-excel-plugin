@@ -32,17 +32,19 @@
     orderLookupState: "nubra.excel.order_lookup_state",
     orderInstrumentResolutionState: "nubra.excel.order_instrument_resolution_state",
     strategyEventFeedState: "nubra.excel.strategy_event_feed_state",
+    ordersWorkspaceView: "nubra.excel.orders_workspace_view",
   };
 
   const BASE = { LIVE: "/proxy/live", UAT: "/proxy/uat" };
   const DATA_ENV = "LIVE";
   const ORDER_ENV = "UAT";
   const STREAM = { master: "master", prices: "live_prices", oc: "live_oc" };
-  const SHEET = { placeOrder: "place_order" };
+  const SHEET = { placeOrder: "place_order", activePnl: "active_pnl" };
   const PAGE = { master: "master", realtime: "realtime", historical: "historical", orders: "orders" };
-  const ENTRY_LTP_BUFFER_BPS = 20;
-  const EXIT_LTP_BUFFER_BPS = 30;
-  const SINGLE_ORDER_LTP_BUFFER_BPS = 20;
+  const ORDER_WORKSPACE_VIEW = { order: "order", strategy: "strategy", live: "live", history: "history" };
+  const ENTRY_LTP_BUFFER_PAISE = 500;
+  const EXIT_LTP_BUFFER_PAISE = 500;
+  const SINGLE_ORDER_LTP_BUFFER_PAISE = 500;
   const BATCH = 4000;
   const REFRESH_REASON = { manual: "manual", stream: "stream", env: "env", system: "system" };
   const SHEET_REFRESH_POLICY = {
@@ -50,6 +52,7 @@
     [STREAM.prices]: { [REFRESH_REASON.manual]: false, [REFRESH_REASON.stream]: true, [REFRESH_REASON.env]: false, [REFRESH_REASON.system]: true },
     [STREAM.oc]: { [REFRESH_REASON.manual]: false, [REFRESH_REASON.stream]: true, [REFRESH_REASON.env]: false, [REFRESH_REASON.system]: true },
     [SHEET.placeOrder]: { [REFRESH_REASON.manual]: true, [REFRESH_REASON.stream]: true, [REFRESH_REASON.env]: true, [REFRESH_REASON.system]: true },
+    [SHEET.activePnl]: { [REFRESH_REASON.manual]: true, [REFRESH_REASON.stream]: false, [REFRESH_REASON.env]: true, [REFRESH_REASON.system]: true },
   };
 
   const ws = {
@@ -96,12 +99,14 @@
   let latestOrderLookupState = null;
   let latestOrderInstrumentResolutionState = {};
   let latestStrategyEventFeedState = [];
+  const singleTradeInputDrafts = new Map();
   let showCompletedTradeHistory = false;
   let instrumentAutoSyncInFlight = false;
   const instrumentAutoSyncLastByEnvExchange = new Map();
   let authTargetEnv = DATA_ENV;
   let ordersAuthPopupTimer = null;
   let pendingOrdersLoginRedirect = false;
+  let currentOrderWorkspaceView = ORDER_WORKSPACE_VIEW.order;
 
   function mkState(sheetName) {
     return {
@@ -244,6 +249,28 @@
       const active = currentPage === key;
       btn.classList.toggle("active", active);
       btn.setAttribute("aria-selected", active ? "true" : "false");
+    }
+  }
+
+  function normalizeOrderWorkspaceView(viewKey) {
+    const key = clean(viewKey || "").toLowerCase();
+    return ORDER_WORKSPACE_VIEW[key] || ORDER_WORKSPACE_VIEW.order;
+  }
+
+  function setActiveOrderWorkspaceView(viewKey) {
+    currentOrderWorkspaceView = normalizeOrderWorkspaceView(viewKey);
+    set(S.ordersWorkspaceView, currentOrderWorkspaceView);
+    if (!U) return;
+
+    for (const btn of U.orderWorkspaceTabButtons || []) {
+      const active = normalizeOrderWorkspaceView(btn.getAttribute("data-order-view-tab")) === currentOrderWorkspaceView;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+    }
+
+    for (const node of U.orderWorkspaceSections || []) {
+      const group = normalizeOrderWorkspaceView(node.getAttribute("data-order-view-group"));
+      node.classList.toggle("hidden", group !== currentOrderWorkspaceView);
     }
   }
 
@@ -839,6 +866,12 @@
     }
   }
 
+  function syncMarketOrderCtaLabel() {
+    if (!U?.placeMarketOrderButton) return;
+    const hasManualEntryPrice = Boolean(clean(U?.marketOrderEntryPriceInput?.value || ""));
+    U.placeMarketOrderButton.textContent = hasManualEntryPrice ? "Place Entry Order" : "Place Buffered Order";
+  }
+
   function setOrderLookupResponse(value) {
     if (!U?.orderLookupResponse) return;
     if (typeof value === "string") {
@@ -986,13 +1019,22 @@
         const pnl = Number(item?.booked_pnl);
         const pnlClass = Number.isFinite(pnl) ? (pnl >= 0 ? "good" : "bad") : "";
         const legs = Array.isArray(item?.legs) ? item.legs : [];
-        const article = document.createElement("article");
-        article.className = "trade-card";
+        const entryPrice = hasCellValue(item?.entry_price_once) ? paiseToRupee(item.entry_price_once) : "-";
+        const exitPrice = hasCellValue(item?.exit_price_once) ? paiseToRupee(item.exit_price_once) : "-";
+        const details = document.createElement("details");
+        details.className = "trade-card trade-card-compact";
 
-        const head = document.createElement("div");
-        head.className = "trade-card-head";
+        const head = document.createElement("summary");
+        head.className = "trade-card-summary";
         const headLeft = document.createElement("div");
+        headLeft.className = "trade-summary-main";
         appendTextNode(headLeft, "h3", "trade-card-title", `${item?.symbol || "-"} | ${item?.strategy || "-"}`);
+        const summaryMeta = document.createElement("div");
+        summaryMeta.className = "trade-summary-meta";
+        appendCompactStatChip(summaryMeta, "Qty", hasCellValue(item?.order_qty) ? item.order_qty : "-");
+        appendCompactStatChip(summaryMeta, "Entry", entryPrice);
+        appendCompactStatChip(summaryMeta, "Exit", exitPrice);
+        headLeft.appendChild(summaryMeta);
         appendTextNode(headLeft, "div", "trade-card-time", item?.closed_at || "");
         const pnlNode = document.createElement("div");
         pnlNode.className = pnlClass ? `trade-card-pnl ${pnlClass}` : "trade-card-pnl";
@@ -1001,15 +1043,12 @@
         head.appendChild(pnlNode);
 
         const body = document.createElement("div");
-        body.className = "trade-card-body";
+        body.className = "trade-card-body trade-card-body-compact";
         const statGrid = document.createElement("div");
-        statGrid.className = "trade-stat-grid";
-        appendTradeStat(statGrid, "Qty", hasCellValue(item?.order_qty) ? item.order_qty : "-");
-        appendTradeStat(statGrid, "Entry Price", hasCellValue(item?.entry_price_once) ? paiseToRupee(item.entry_price_once) : "-");
-        appendTradeStat(statGrid, "Exit Price", hasCellValue(item?.exit_price_once) ? paiseToRupee(item.exit_price_once) : "-");
-        appendTradeStat(statGrid, "Entry Basket", hasCellValue(item?.entry_basket_id) ? item.entry_basket_id : "-");
-        appendTradeStat(statGrid, "Exit Basket", hasCellValue(item?.exit_basket_id) ? item.exit_basket_id : "-");
-        appendTradeStat(statGrid, "Entry Tag", item?.entry_tag || "-");
+        statGrid.className = "trade-chip-grid";
+        appendCompactStatChip(statGrid, "Entry Basket", hasCellValue(item?.entry_basket_id) ? item.entry_basket_id : "-");
+        appendCompactStatChip(statGrid, "Exit Basket", hasCellValue(item?.exit_basket_id) ? item.exit_basket_id : "-");
+        appendCompactStatChip(statGrid, "Entry Tag", item?.entry_tag || "-");
 
         const legsWrap = document.createElement("div");
         legsWrap.className = "trade-legs";
@@ -1028,9 +1067,9 @@
 
         body.appendChild(statGrid);
         body.appendChild(legsWrap);
-        article.appendChild(head);
-        article.appendChild(body);
-        fragment.appendChild(article);
+        details.appendChild(head);
+        details.appendChild(body);
+        fragment.appendChild(details);
       }
       U.completedTradesResponse.appendChild(fragment);
     } catch (_e) {
@@ -1230,7 +1269,12 @@
     let actionLabel = "Square Off";
     let actionDisabled = true;
 
-    if (exitState?.status === "pending_fill") {
+    if (exitState?.status === "submitting") {
+      statusTone = "pending";
+      statusText = exitState.message || "Square-off submission is in progress.";
+      actionLabel = "Submitting...";
+      actionDisabled = true;
+    } else if (exitState?.status === "pending_fill") {
       statusTone = "pending";
       statusText = exitState.message || "Square-off submitted. Waiting for broker fill confirmation.";
       actionLabel = "Pending Fill...";
@@ -1245,6 +1289,7 @@
       symbol: tracked.symbol || "",
       strategy: tracked.strategy || "",
       target_delta: tracked.target_delta,
+      long_target_delta: tracked.long_target_delta ?? null,
       pair_number: tracked.pair_number,
       entry_at: entryAt,
       order_qty: Number.isFinite(qty) && qty > 0 ? qty : null,
@@ -1261,6 +1306,7 @@
       actionLabel,
       actionDisabled,
       legs: Array.isArray(tracked.legs) ? tracked.legs.slice(0, 8) : [],
+      source: tracked.source || {},
     };
   }
 
@@ -1320,6 +1366,7 @@
       statusTone: snapshot.statusTone || "flat",
       statusText: snapshot.statusText || "",
       legs,
+      source: trackedState?.source || snapshot.source || {},
       last_seen_at: new Date().toISOString(),
     };
     const list = Array.isArray(latestLiveStrategyBookState) ? latestLiveStrategyBookState.slice(0, 79) : [];
@@ -1360,6 +1407,7 @@
       actionLabel: "Square Off",
       actionDisabled: !(Array.isArray(entry?.legs) && entry.legs.length && (clean(entry?.basket_tag || "") || hasCellValue(entry?.basket_id))),
       legs: Array.isArray(entry?.legs) ? entry.legs.slice(0, 8) : [],
+      source: entry?.source || {},
     };
     if (!base.legs.length || !Number.isFinite(base.entry_price_once) || !Number.isFinite(base.order_qty)) return base;
 
@@ -1427,7 +1475,7 @@
       requested_order_qty: Number.isFinite(qty) && qty > 0 ? qty : null,
       baseline: latestTrackedStrategyState?.baseline || {},
       legs: Array.isArray(snapshot.legs) ? snapshot.legs.map((leg) => ({ ...leg })) : [],
-      source: latestTrackedStrategyState?.source || {},
+      source: snapshot.source || latestTrackedStrategyState?.source || {},
     };
     saveScopedJson(S.trackedStrategyState, latestTrackedStrategyState, ORDER_ENV);
 
@@ -1456,14 +1504,31 @@
     };
     saveScopedJson(S.basketSubmitState, latestBasketSubmitState, ORDER_ENV);
 
-    if (!latestDeployPreviewState || !Number.isFinite(Number(latestDeployPreviewState?.requested_order_qty))) {
-      latestDeployPreviewState = {
-        ...(latestDeployPreviewState || {}),
-        environment: envLabel(ORDER_ENV),
-        requested_order_qty: Number.isFinite(qty) && qty > 0 ? qty : null,
-        signed_entry_price_raw: entryPricePaise,
-      };
-      saveScopedJson(S.deployPreviewState, latestDeployPreviewState, ORDER_ENV);
+    latestDeployPreviewState = {
+      environment: envLabel(ORDER_ENV),
+      generated_at_ist: formatIstDateTime(new Date()),
+      tracked_symbol: snapshot.symbol || "",
+      strategy: snapshot.strategy || "",
+      requested_order_qty: Number.isFinite(qty) && qty > 0 ? qty : null,
+      signed_entry_price_raw: entryPricePaise,
+      signed_entry_price_int: entryPricePaise,
+      signed_entry_price_buffered_int: null,
+      deploy_payload: null,
+      flexi_order_request: null,
+    };
+    saveScopedJson(S.deployPreviewState, latestDeployPreviewState, ORDER_ENV);
+
+    const activeEntryTag = clean(snapshot.basket_tag || "");
+    const activeBasketId = hasCellValue(snapshot.basket_id) ? String(snapshot.basket_id) : "";
+    const squareOffMatchesSnapshot = Boolean(latestSquareOffSubmitState) && (
+      (activeBasketId && String(latestSquareOffSubmitState?.original_basket_id ?? "") === activeBasketId)
+      || (activeEntryTag && String(latestSquareOffSubmitState?.entry_tag ?? latestSquareOffSubmitState?.request?.entry_tag ?? "") === activeEntryTag)
+    );
+    if (!squareOffMatchesSnapshot) {
+      latestSquareOffPreviewState = null;
+      latestSquareOffSubmitState = null;
+      delScoped(S.squareOffPreviewState, ORDER_ENV);
+      delScoped(S.squareOffSubmitState, ORDER_ENV);
     }
     return true;
   }
@@ -1559,6 +1624,66 @@
     return Number(paiseToRupee(n)).toFixed(2);
   }
 
+  function singleTradeDraftKey(tradeId, fieldName) {
+    return `${clean(tradeId)}::${clean(fieldName)}`;
+  }
+
+  function setSingleTradeInputDraft(tradeId, fieldName, value) {
+    const key = singleTradeDraftKey(tradeId, fieldName);
+    if (!key || key === "::") return;
+    singleTradeInputDrafts.set(key, String(value ?? ""));
+  }
+
+  function getSingleTradeInputDraft(tradeId, fieldName, fallbackValue = "") {
+    const key = singleTradeDraftKey(tradeId, fieldName);
+    if (!key || key === "::") return String(fallbackValue ?? "");
+    return singleTradeInputDrafts.has(key)
+      ? String(singleTradeInputDrafts.get(key) ?? "")
+      : String(fallbackValue ?? "");
+  }
+
+  function clearSingleTradeInputDraft(tradeId, fieldName = "") {
+    const tradeKey = clean(tradeId);
+    const fieldKey = clean(fieldName);
+    if (!tradeKey) return;
+    if (fieldKey) {
+      singleTradeInputDrafts.delete(singleTradeDraftKey(tradeKey, fieldKey));
+      return;
+    }
+    for (const key of Array.from(singleTradeInputDrafts.keys())) {
+      if (key.startsWith(`${tradeKey}::`)) singleTradeInputDrafts.delete(key);
+    }
+  }
+
+  function captureSingleTradeEditorState() {
+    const active = document.activeElement;
+    if (!active || active.tagName !== "INPUT" || !U?.singleTradesResponse?.contains(active)) return null;
+    const tradeId = clean(active.getAttribute("data-trade-id") || active.closest?.("[data-trade-id]")?.getAttribute?.("data-trade-id") || "");
+    const fieldName = clean(active.getAttribute("data-input") || "");
+    if (!tradeId || !fieldName) return null;
+    return {
+      tradeId,
+      fieldName,
+      selectionStart: Number.isInteger(active.selectionStart) ? active.selectionStart : null,
+      selectionEnd: Number.isInteger(active.selectionEnd) ? active.selectionEnd : null,
+    };
+  }
+
+  function restoreSingleTradeEditorState(state) {
+    if (!state || !U?.singleTradesResponse) return;
+    const selector = `input[data-trade-id="${state.tradeId}"][data-input="${state.fieldName}"]`;
+    const input = U.singleTradesResponse.querySelector(selector);
+    if (!input) return;
+    try {
+      input.focus({ preventScroll: true });
+    } catch (_e) {
+      input.focus();
+    }
+    if (Number.isInteger(state.selectionStart) && Number.isInteger(state.selectionEnd) && typeof input.setSelectionRange === "function") {
+      input.setSelectionRange(state.selectionStart, state.selectionEnd);
+    }
+  }
+
   function setSingleTradesResponse() {
     if (!U?.singleTradesResponse) return;
     const trades = liveSingleTrades();
@@ -1567,12 +1692,13 @@
       U.singleTradesResponse.textContent = "No live single trade yet.";
       return;
     }
+    const editorState = captureSingleTradeEditorState();
     U.singleTradesResponse.className = "single-trade-list";
     clearChildren(U.singleTradesResponse);
     const fragment = document.createDocumentFragment();
     for (const trade of trades.slice(0, 12)) {
       const article = document.createElement("article");
-      article.className = "single-trade-card";
+      article.className = "single-trade-card single-trade-card-compact";
       article.setAttribute("data-trade-id", trade.id || "");
 
       const head = document.createElement("div");
@@ -1580,36 +1706,38 @@
       const headLeft = document.createElement("div");
       appendTextNode(headLeft, "h3", "trade-card-title", `${trade.symbol || "-"} | ${singleTradePositionSideText(trade)}`);
       appendTextNode(headLeft, "div", "trade-card-time", trade.opened_at || trade.requested_at_ist || "");
+      const headRight = document.createElement("div");
+      headRight.className = "single-trade-head-actions";
       const pnlNode = document.createElement("div");
       const pnlClass = activeStrategyPnlClass(trade.live_pnl_rupee);
       pnlNode.className = pnlClass ? `trade-card-pnl ${pnlClass}` : "trade-card-pnl";
       pnlNode.textContent = formatActiveStrategyPnl(trade.live_pnl_rupee);
+      const exitBtn = document.createElement("button");
+      exitBtn.type = "button";
+      exitBtn.className = "single-trade-exit-btn";
+      exitBtn.setAttribute("data-action", "exit-single-now");
+      exitBtn.setAttribute("data-trade-id", trade.id || "");
+      exitBtn.textContent = "Exit";
+      exitBtn.disabled = upper(trade?.status || "") === "EXIT_PENDING";
       head.appendChild(headLeft);
-      head.appendChild(pnlNode);
+      headRight.appendChild(pnlNode);
+      headRight.appendChild(exitBtn);
+      head.appendChild(headRight);
 
       const body = document.createElement("div");
       body.className = "single-trade-body";
 
-      const statGrid = document.createElement("div");
-      statGrid.className = "trade-stat-grid";
-      appendTradeStat(statGrid, "Status", formatSingleTradeStatus(trade));
-      appendTradeStat(statGrid, "Qty", hasCellValue(trade?.open_qty) ? trade.open_qty : (trade?.order_qty || "-"));
-      appendTradeStat(statGrid, "Entry", hasCellValue(trade?.entry_fill_price_paise) ? paiseToRupee(trade.entry_fill_price_paise) : "-");
-      appendTradeStat(statGrid, "LTP", hasCellValue(trade?.ltp_paise) ? paiseToRupee(trade.ltp_paise) : "-");
-      appendTradeStat(statGrid, "Target", hasCellValue(trade?.target_price_paise) ? paiseToRupee(trade.target_price_paise) : "-");
-      appendTradeStat(statGrid, "SL", hasCellValue(trade?.sl_trigger_price_paise) ? paiseToRupee(trade.sl_trigger_price_paise) : "-");
-      body.appendChild(statGrid);
-
       const chips = document.createElement("div");
       chips.className = "single-trade-meta";
-      for (const text of [
-        `ref_id ${trade.ref_id || "-"}`,
-        trade.exchange || "NSE",
-        trade.tag ? `tag ${trade.tag}` : "",
-        trade.sl_order_id ? `SL order ${trade.sl_order_id}` : "",
-      ].filter(Boolean)) {
-        appendTextNode(chips, "span", "single-trade-chip", text);
-      }
+      appendCompactStatChip(chips, "Status", formatSingleTradeStatus(trade), "single-trade-chip");
+      appendCompactStatChip(chips, "Qty", hasCellValue(trade?.open_qty) ? trade.open_qty : (trade?.order_qty || "-"), "single-trade-chip");
+      appendCompactStatChip(chips, "Entry", hasCellValue(trade?.entry_fill_price_paise) ? paiseToRupee(trade.entry_fill_price_paise) : "-", "single-trade-chip");
+      appendCompactStatChip(chips, "LTP", hasCellValue(trade?.ltp_paise) ? paiseToRupee(trade.ltp_paise) : "-", "single-trade-chip");
+      appendCompactStatChip(chips, "Target", hasCellValue(trade?.target_price_paise) ? paiseToRupee(trade.target_price_paise) : "-", "single-trade-chip");
+      appendCompactStatChip(chips, "SL", hasCellValue(trade?.sl_trigger_price_paise) ? paiseToRupee(trade.sl_trigger_price_paise) : "-", "single-trade-chip");
+      if (hasCellValue(trade?.ref_id)) appendCompactStatChip(chips, "Ref", trade.ref_id, "single-trade-chip");
+      appendCompactStatChip(chips, "Exch", trade.exchange || "NSE", "single-trade-chip");
+      if (trade.sl_order_id) appendCompactStatChip(chips, "SL Order", trade.sl_order_id, "single-trade-chip");
       body.appendChild(chips);
 
       const controls = document.createElement("div");
@@ -1624,7 +1752,7 @@
       targetInput.type = "number";
       targetInput.min = "0";
       targetInput.step = "0.05";
-      targetInput.value = formatPriceInputValue(trade.target_price_paise);
+      targetInput.value = getSingleTradeInputDraft(trade.id || "", "target", formatPriceInputValue(trade.target_price_paise));
       targetInput.placeholder = "Price";
       targetInput.setAttribute("data-input", "target");
       targetInput.setAttribute("data-trade-id", trade.id || "");
@@ -1633,7 +1761,7 @@
       targetBtn.className = "secondary";
       targetBtn.setAttribute("data-action", "save-single-target");
       targetBtn.setAttribute("data-trade-id", trade.id || "");
-      targetBtn.textContent = "Save Target";
+      targetBtn.textContent = "Save";
       targetRow.appendChild(targetInput);
       targetRow.appendChild(targetBtn);
       targetWrap.appendChild(targetRow);
@@ -1648,7 +1776,7 @@
       slInput.type = "number";
       slInput.min = "0";
       slInput.step = "0.05";
-      slInput.value = formatPriceInputValue(trade.sl_trigger_price_paise);
+      slInput.value = getSingleTradeInputDraft(trade.id || "", "sl", formatPriceInputValue(trade.sl_trigger_price_paise));
       slInput.placeholder = "Trigger";
       slInput.setAttribute("data-input", "sl");
       slInput.setAttribute("data-trade-id", trade.id || "");
@@ -1658,7 +1786,7 @@
       slBtn.setAttribute("data-action", "add-single-sl");
       slBtn.setAttribute("data-trade-id", trade.id || "");
       const slActive = trade.sl_order_id && !isFilledOrderStatusText(trade.sl_status) && !isDeadOrderStatusText(trade.sl_status);
-      slBtn.textContent = slActive ? "SL Active" : "Add SL";
+      slBtn.textContent = slActive ? "Active" : "Add SL";
       slBtn.disabled = Boolean(slActive);
       slRow.appendChild(slInput);
       slRow.appendChild(slBtn);
@@ -1668,21 +1796,16 @@
 
       const actions = document.createElement("div");
       actions.className = "single-trade-actions";
-      const exitBtn = document.createElement("button");
-      exitBtn.type = "button";
-      exitBtn.className = "secondary";
-      exitBtn.setAttribute("data-action", "exit-single-now");
-      exitBtn.setAttribute("data-trade-id", trade.id || "");
-      exitBtn.textContent = "Exit Now";
-      exitBtn.disabled = upper(trade?.status || "") === "EXIT_PENDING";
+      const actionsLeft = document.createElement("div");
+      actionsLeft.className = "single-trade-actions-left";
       const clearBtn = document.createElement("button");
       clearBtn.type = "button";
       clearBtn.className = "secondary";
       clearBtn.setAttribute("data-action", "clear-single-target");
       clearBtn.setAttribute("data-trade-id", trade.id || "");
       clearBtn.textContent = "Clear Target";
-      actions.appendChild(exitBtn);
-      actions.appendChild(clearBtn);
+      actionsLeft.appendChild(clearBtn);
+      actions.appendChild(actionsLeft);
       body.appendChild(actions);
 
       appendTextNode(
@@ -1697,6 +1820,7 @@
       fragment.appendChild(article);
     }
     U.singleTradesResponse.appendChild(fragment);
+    restoreSingleTradeEditorState(editorState);
   }
 
   function clearTransientStrategyStates(options = {}) {
@@ -1764,6 +1888,7 @@
       symbol: previewState.payload.symbol,
       strategy: previewState.payload.strategy,
       target_delta: previewState.payload.target_delta,
+      long_target_delta: previewState.payload.long_target_delta,
       selected_at: previewState.payload.selected_at,
       pair_number: previewState.payload.pair_number,
       requested_order_qty: null,
@@ -1811,6 +1936,7 @@
       expiry: String(trackedState.symbol || "").split(":")[1] || trackedState.source?.expiry || "",
       strategy: trackedState.strategy,
       target_delta: trackedState.target_delta,
+      long_target_delta: trackedState.long_target_delta ?? null,
       pair_number: trackedState.pair_number,
       selected_at: trackedState.selected_at,
       baseline_greeks: trackedState.baseline || {},
@@ -1865,20 +1991,19 @@
     return seen ? total : null;
   }
 
-  function applySignedPriceBuffer(rawPrice, bps = 0, signStyle = "sell_positive") {
+  function applySignedPriceBuffer(rawPrice, bufferPaise = 0, signStyle = "sell_positive") {
     const raw = Number(rawPrice);
-    const bpsNum = Number(bps || 0);
-    if (!Number.isFinite(raw) || !Number.isFinite(bpsNum) || bpsNum <= 0) return raw;
-    const ratio = bpsNum / 10000;
+    const buffer = Math.round(Number(bufferPaise || 0));
+    if (!Number.isFinite(raw) || !Number.isFinite(buffer) || buffer <= 0) return raw;
     const abs = Math.abs(raw);
     if (!Number.isFinite(abs) || abs <= 0) return raw;
     let nextAbs = abs;
     if (signStyle === "sell_positive") {
       // Credit: accept a little less. Debit: pay a little more.
-      nextAbs = raw >= 0 ? abs * (1 - ratio) : abs * (1 + ratio);
+      nextAbs = raw >= 0 ? Math.max(1, abs - buffer) : abs + buffer;
     } else {
       // Debit: pay a little more. Credit: accept a little less.
-      nextAbs = raw >= 0 ? abs * (1 + ratio) : abs * (1 - ratio);
+      nextAbs = raw >= 0 ? abs + buffer : Math.max(1, abs - buffer);
     }
     const signed = raw >= 0 ? nextAbs : -nextAbs;
     return Math.round(signed);
@@ -1906,6 +2031,14 @@
 
   function parseTickSizeInputToPaise(value) {
     const n = Number(clean(value));
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return Math.max(1, Math.round(n * 100));
+  }
+
+  function parsePriceRupeeInputToPaise(value) {
+    const raw = clean(value);
+    if (!raw) return null;
+    const n = Number(raw);
     if (!Number.isFinite(n) || n <= 0) return null;
     return Math.max(1, Math.round(n * 100));
   }
@@ -2020,6 +2153,164 @@
     return data?.portfolio || {};
   }
 
+  function inferTradeDeliveryTypeFromPositionRow(row) {
+    const product = upper(row?.product || "");
+    if (product.includes("IDAY")) return "ORDER_DELIVERY_TYPE_IDAY";
+    return "ORDER_DELIVERY_TYPE_CNC";
+  }
+
+  function recoverSingleTradesFromPortfolio(portfolio, options = {}) {
+    const silent = Boolean(options.silent);
+    const current = Array.isArray(latestSingleTradeBookState) ? latestSingleTradeBookState.slice() : [];
+    const trackedRefs = new Set((latestTrackedStrategyState?.legs || [])
+      .map((leg) => Number(leg?.ref_id))
+      .filter((refId) => Number.isInteger(refId) && refId > 0));
+    const rows = positionsRowsFromPortfolio(portfolio || {}, { includeClosed: false });
+    let recovered = 0;
+    let changed = false;
+
+    for (const row of rows) {
+      const refId = Number(row?.ref_id);
+      const signedQty = signedQtyFromPositionRow(row);
+      if (!Number.isInteger(refId) || refId <= 0 || signedQty === 0) continue;
+      if (trackedRefs.has(refId)) continue;
+
+      const entryOrderSide = signedQty < 0 ? "ORDER_SIDE_SELL" : "ORDER_SIDE_BUY";
+      const existingIdx = current.findIndex((trade) => (
+        !trade?.closed
+        && Number(trade?.ref_id) === refId
+        && upper(trade?.entry_order_side || "") === entryOrderSide
+      ));
+
+      const baseTrade = existingIdx >= 0
+        ? { ...current[existingIdx] }
+        : {
+          id: `recovered_${refId}_${entryOrderSide === "ORDER_SIDE_SELL" ? "sell" : "buy"}`,
+          environment: envLabel(ORDER_ENV),
+          created_at: formatIstDateTime(new Date()),
+          requested_at_ist: formatIstDateTime(new Date()),
+          opened_at: formatIstDateTime(new Date()),
+          closed_at: null,
+          closed: false,
+          status: "open",
+          symbol: row?.symbol || row?.display_name || "",
+          exchange: row?.exchange || "NSE",
+          ref_id: refId,
+          tag: `recovered_position_${refId}`,
+          entry_order_id: null,
+          entry_order_side: entryOrderSide,
+          delivery_type: inferTradeDeliveryTypeFromPositionRow(row),
+          validity_type: "DAY",
+          entry_request: null,
+          entry_response: null,
+          entry_price_origin: "portfolio_recovery",
+          target_price_paise: null,
+          target_exit_inflight: false,
+          sl_order_id: null,
+          sl_status: "",
+          sl_trigger_price_paise: null,
+          exit_order_id: null,
+          exit_reason: "",
+          exit_fill_price_paise: null,
+          booked_pnl_rupee: null,
+          recovered_from_portfolio: true,
+        };
+
+      const nextTrade = seedSingleTradePnlAnchor({
+        ...baseTrade,
+        closed: false,
+        status: "open",
+        symbol: row?.symbol || baseTrade.symbol || row?.display_name || "",
+        exchange: row?.exchange || baseTrade.exchange || "NSE",
+        ref_id: refId,
+        entry_order_side: entryOrderSide,
+        delivery_type: baseTrade.delivery_type || inferTradeDeliveryTypeFromPositionRow(row),
+        open_qty: Math.abs(signedQty),
+        order_qty: Math.abs(signedQty),
+        entry_fill_price_paise: Number.isFinite(Number(row?.avg_price)) ? Math.round(Number(row.avg_price)) : baseTrade.entry_fill_price_paise,
+        ltp_paise: Number.isFinite(Number(row?.ltp ?? row?.last_traded_price)) ? Math.round(Number(row?.ltp ?? row?.last_traded_price)) : baseTrade.ltp_paise,
+        live_pnl_rupee: normalizeBrokerPnlToRupee(row?.pnl ?? row?.live_pnl ?? row?.unrealised_pnl, null),
+        recovered_from_portfolio: true,
+      }, row);
+      nextTrade.live_pnl_rupee = singleTradeLivePnlRupee(nextTrade, row);
+
+      if (existingIdx >= 0) {
+        current[existingIdx] = nextTrade;
+        changed = true;
+      } else {
+        current.unshift(nextTrade);
+        recovered += 1;
+        changed = true;
+      }
+    }
+
+    if (!changed) return { recovered: 0 };
+    latestSingleTradeBookState = current.slice(0, 40);
+    saveSingleTradeBookState();
+    setSingleTradesResponse();
+    syncSingleTradeQuotePoller();
+    if (recovered && !silent) {
+      setSingleTradeActionMessage(`Recovered ${recovered} live broker position${recovered === 1 ? "" : "s"} into the dashboard.`, "info");
+    }
+    if (recovered) {
+      lg(`Recovered ${recovered} live broker position${recovered === 1 ? "" : "s"} into Single Trade Dashboard from UAT portfolio.`);
+    }
+    return { recovered };
+  }
+
+  async function reconcileSingleTradesAgainstOpenPositions(options = {}) {
+    const silent = Boolean(options.silent);
+    if (!isAuthEnv(ORDER_ENV)) return { pruned: 0 };
+    const portfolio = await fetchPortfolioSnapshot().catch(() => null);
+    if (!portfolio) return { pruned: 0 };
+    const recovery = recoverSingleTradesFromPortfolio(portfolio, { silent });
+    const current = Array.isArray(latestSingleTradeBookState) ? latestSingleTradeBookState.slice() : [];
+    if (!current.length) return { pruned: 0, recovered: recovery.recovered || 0 };
+
+    let pruned = 0;
+    const next = current.map((trade) => {
+      if (!trade || trade.closed) return trade;
+      const status = upper(trade.status || "");
+      if (status === "FAILED" || status === "ENTRY_PENDING") return trade;
+
+      const positionRow = findPositionRowForSingleTrade(portfolio, trade);
+      if (positionRow) return trade;
+
+      pruned += 1;
+      clearSingleTradeInputDraft(trade.id || "");
+      pushStrategyEvent({
+        at: formatIstDateTime(new Date()),
+        label: "Closed",
+        symbol: trade.symbol || "",
+        strategy: "single_trade",
+        qty: trade.order_qty,
+        tone: "info",
+        detail: "No open UAT position found during launch sync. Hidden from dashboard.",
+      });
+      return {
+        ...trade,
+        closed: true,
+        status: "closed",
+        closed_at: trade.closed_at || formatIstDateTime(new Date()),
+        closed_source: "portfolio_positions_sync",
+        exit_reason: trade.exit_reason || "external_position_sync",
+        open_qty: 0,
+      };
+    });
+
+    if (!pruned) return { pruned: 0, recovered: recovery.recovered || 0 };
+
+    latestSingleTradeBookState = next;
+    saveSingleTradeBookState();
+    setSingleTradesResponse();
+    syncSingleTradeQuotePoller();
+    if (!silent) {
+      setSingleTradeActionMessage(`Synced UAT positions and hid ${pruned} stale single trade${pruned === 1 ? "" : "s"}.`, "info");
+    }
+    lg(`UAT launch sync hid ${pruned} single trade${pruned === 1 ? "" : "s"} with no open broker position.`);
+    return { pruned, recovered: recovery.recovered || 0 };
+  }
+
   function singleTradeById(tradeId) {
     return (Array.isArray(latestSingleTradeBookState) ? latestSingleTradeBookState : []).find((item) => clean(item?.id || "") === clean(tradeId)) || null;
   }
@@ -2099,9 +2390,9 @@
     const triggerInt = Math.round(trigger);
     const side = upper(exitOrderSide || "ORDER_SIDE_SELL");
     if (side === "ORDER_SIDE_SELL") {
-      return Math.max(1, applySignedPriceBuffer(triggerInt, SINGLE_ORDER_LTP_BUFFER_BPS, "sell_positive"));
+      return Math.max(1, applySignedPriceBuffer(triggerInt, SINGLE_ORDER_LTP_BUFFER_PAISE, "sell_positive"));
     }
-    return Math.max(1, applySignedPriceBuffer(triggerInt, SINGLE_ORDER_LTP_BUFFER_BPS, "buy_positive"));
+    return Math.max(1, applySignedPriceBuffer(triggerInt, SINGLE_ORDER_LTP_BUFFER_PAISE, "buy_positive"));
   }
 
   async function fetchOrderDetailById(orderId) {
@@ -2290,7 +2581,7 @@
       throw new Error("LTP unavailable for exit order.");
     }
     const bufferStyle = exitOrderSide === "ORDER_SIDE_BUY" ? "buy_positive" : "sell_positive";
-    const rawOrderPrice = applySignedPriceBuffer(ltpInfo.ltpPaise, SINGLE_ORDER_LTP_BUFFER_BPS, bufferStyle);
+    const rawOrderPrice = applySignedPriceBuffer(ltpInfo.ltpPaise, SINGLE_ORDER_LTP_BUFFER_PAISE, bufferStyle);
     const tickSizePaise = defaultTickSizePaiseForInstrument(trade, trade.exchange);
     const orderPrice = alignPriceToTick(rawOrderPrice, tickSizePaise, exitOrderSide);
     const payload = {
@@ -2393,6 +2684,51 @@
         : `trigger ${paiseToRupee(trigger)}`,
     });
     return { payload, response };
+  }
+
+  function buildClosedSingleTradeRecord(trade) {
+    if (!trade?.closed) return null;
+    const entryPrice = Number(trade?.entry_fill_price_paise);
+    const exitPrice = Number(trade?.exit_fill_price_paise);
+    const qty = Number(trade?.order_qty || trade?.open_qty || 0);
+    const bookedPnl = Number(trade?.booked_pnl_rupee);
+    return {
+      id: clean(trade?.archived_trade_id || "") || `single_trade_${clean(trade?.id || "") || Date.now()}`,
+      closed_at: trade?.closed_at || formatIstDateTime(new Date()),
+      environment: envLabel(ORDER_ENV),
+      symbol: trade?.symbol || "",
+      strategy: "single_trade",
+      order_qty: Number.isFinite(qty) && qty > 0 ? qty : null,
+      entry_tag: trade?.tag || "",
+      entry_basket_id: trade?.entry_order_id ?? null,
+      exit_tag: trade?.exit_tag || trade?.sl_tag || "",
+      exit_basket_id: trade?.exit_order_id ?? trade?.sl_order_id ?? null,
+      entry_price_once: Number.isFinite(entryPrice) ? entryPrice : null,
+      exit_price_once: Number.isFinite(exitPrice) ? exitPrice : null,
+      booked_pnl: Number.isFinite(bookedPnl) ? bookedPnl : null,
+      booked_pnl_source: "single_trade_fill_prices",
+      portfolio_before_stats: null,
+      portfolio_after_stats: null,
+      baseline_greeks: {},
+      legs: [{
+        side: upper(trade?.entry_order_side) === "ORDER_SIDE_SELL" ? "SELL" : "BUY",
+        option_type: trade?.exchange || "",
+        ref_id: trade?.ref_id ?? "",
+        strike: trade?.symbol || "",
+        lot_size: trade?.order_qty ?? "",
+      }],
+    };
+  }
+
+  function archiveSingleTradeIfNeeded(trade) {
+    if (!trade?.closed || hasCellValue(trade?.archived_trade_id)) return trade;
+    const record = buildClosedSingleTradeRecord(trade);
+    const archivedTradeId = archiveClosedTradeRecord(record, { skipActiveRefresh: true });
+    if (!archivedTradeId) return trade;
+    return {
+      ...trade,
+      archived_trade_id: archivedTradeId,
+    };
   }
 
   async function reconcileSingleTradeBook(options = {}) {
@@ -2542,6 +2878,9 @@
           }
         }
       }
+      if (trade.closed) {
+        Object.assign(trade, archiveSingleTradeIfNeeded(trade));
+      }
       updatedTrades.push(trade);
     }
     if (updatedTrades.length) {
@@ -2569,6 +2908,7 @@
     if (!trade) throw new Error("Single trade not found.");
     const pricePaise = parseDashboardPriceInput(rawValue);
     if (!Number.isFinite(pricePaise) || pricePaise <= 0) throw new Error("Enter a valid target price.");
+    clearSingleTradeInputDraft(tradeId, "target");
     upsertSingleTrade({
       ...trade,
       target_price_paise: pricePaise,
@@ -2586,12 +2926,14 @@
     if (!Number.isFinite(pricePaise) || pricePaise <= 0) throw new Error("Enter a valid SL trigger price.");
     setSingleTradeActionMessage("Submitting protective stop-loss order...", "info");
     await submitSingleTradeStoploss(trade, pricePaise);
+    clearSingleTradeInputDraft(tradeId, "sl");
     setSingleTradeActionMessage(`Protective SL submitted at ${paiseToRupee(pricePaise)}.`, "success");
   }
 
   function clearSingleTradeTarget(tradeId) {
     const trade = singleTradeById(tradeId);
     if (!trade) throw new Error("Single trade not found.");
+    clearSingleTradeInputDraft(tradeId, "target");
     upsertSingleTrade({
       ...trade,
       target_price_paise: null,
@@ -2622,7 +2964,7 @@
     const entryPriceRaw = signedEntryPriceFromTracked(trackedState, "sell_positive");
     const entryPriceInt = Number.isFinite(entryPriceRaw) ? Math.round(entryPriceRaw) : null;
     const entryPriceBuffered = Number.isFinite(entryPriceRaw)
-      ? applySignedPriceBuffer(entryPriceRaw, ENTRY_LTP_BUFFER_BPS, "sell_positive")
+      ? applySignedPriceBuffer(entryPriceRaw, ENTRY_LTP_BUFFER_PAISE, "sell_positive")
       : null;
     const orders = (trackedState.legs || []).map((leg) => ({
       ref_id: hasCellValue(leg.ref_id) ? Number(leg.ref_id) : null,
@@ -2673,11 +3015,15 @@
     const multiplier = Number(clean(options.multiplier || "1"));
     if (!Number.isInteger(multiplier) || multiplier <= 0) throw new Error("Multiplier must be a positive integer.");
     const deliveryType = clean(options.deliveryType || "ORDER_DELIVERY_TYPE_CNC");
-    const deployPayload = latestDeployPreviewState?.deploy_payload || buildDeployPayloadFromTracked(trackedState, trackedState.requested_order_qty);
+    const activeTrackedSymbol = clean(trackedState?.symbol || "");
+    const previewTrackedSymbol = clean(latestDeployPreviewState?.tracked_symbol || latestDeployPreviewState?.deploy_payload?.symbol || "");
+    const deployPayload = previewTrackedSymbol && activeTrackedSymbol && previewTrackedSymbol === activeTrackedSymbol
+      ? (latestDeployPreviewState?.deploy_payload || buildDeployPayloadFromTracked(trackedState, trackedState.requested_order_qty))
+      : buildDeployPayloadFromTracked(trackedState, trackedState.requested_order_qty);
     const exitTag = deployPayload?.exit_tag || `dashboard_${String(trackedState.strategy || "strategy").toLowerCase()}_exit`;
     const exitPriceRaw = signedExitPriceFromTracked(trackedState, "buy_positive");
     const exitPriceBuffered = Number.isFinite(exitPriceRaw)
-      ? applySignedPriceBuffer(exitPriceRaw, EXIT_LTP_BUFFER_BPS, "buy_positive")
+      ? applySignedPriceBuffer(exitPriceRaw, EXIT_LTP_BUFFER_PAISE, "buy_positive")
       : null;
     const requestBody = {
       exchange: trackedState.source?.exchange || "NSE",
@@ -2746,13 +3092,11 @@
   }
 
   function isBasketFailureStatus(statusText) {
-    const status = upper(statusText || "");
-    return status.includes("REJECT") || status.includes("CANCEL");
+    return isDeadOrderStatusText(statusText) || upper(statusText || "").includes("ERROR");
   }
 
   function isBasketClosedStatus(statusText) {
-    const status = upper(statusText || "");
-    return status.includes("FILLED") || status.includes("CLOSED");
+    return isFilledOrderStatusText(statusText) || upper(statusText || "").includes("CLOSED");
   }
 
   function findBasketFromResponse(response, tag, basketId) {
@@ -2905,6 +3249,23 @@
     };
   }
 
+  function archiveClosedTradeRecord(record, options = {}) {
+    if (!record || !record.id) return null;
+    const existing = Array.isArray(latestClosedTradeHistoryState) ? latestClosedTradeHistoryState : [];
+    const duplicate = existing.find((item) => (
+      clean(item?.id || "") === clean(record.id || "")
+      || (record.entry_tag && clean(item?.entry_tag || "") === clean(record.entry_tag || "") && clean(item?.exit_tag || "") === clean(record.exit_tag || ""))
+    ));
+    if (duplicate) return duplicate.id || null;
+
+    latestClosedTradeHistoryState = [record, ...existing].slice(0, 120);
+    saveScopedJson(S.closedTradeHistoryState, latestClosedTradeHistoryState, ORDER_ENV);
+    pruneLiveStrategyBookFromClosedHistory();
+    setCompletedTradesResponse(latestClosedTradeHistoryState);
+    if (!options.skipActiveRefresh) setActiveStrategiesResponse();
+    return record.id;
+  }
+
   function normalizeBrokerPnlToRupee(rawValue, computedRupee = null) {
     const raw = Number(rawValue);
     if (!Number.isFinite(raw)) return null;
@@ -2947,15 +3308,11 @@
     if (hasCellValue(latestSquareOffSubmitState?.archived_trade_id)) return latestSquareOffSubmitState.archived_trade_id;
     const record = buildClosedTradeRecord();
     if (!record) return null;
-
-    latestClosedTradeHistoryState = [record, ...(Array.isArray(latestClosedTradeHistoryState) ? latestClosedTradeHistoryState : [])].slice(0, 120);
-    saveScopedJson(S.closedTradeHistoryState, latestClosedTradeHistoryState, ORDER_ENV);
-    pruneLiveStrategyBookFromClosedHistory();
-    setCompletedTradesResponse(latestClosedTradeHistoryState);
+    const archivedTradeId = archiveClosedTradeRecord(record, { skipActiveRefresh: true });
 
     latestSquareOffSubmitState = {
       ...latestSquareOffSubmitState,
-      archived_trade_id: record.id,
+      archived_trade_id: archivedTradeId,
     };
     saveScopedJson(S.squareOffSubmitState, latestSquareOffSubmitState, ORDER_ENV);
     setActiveStrategiesResponse();
@@ -2982,7 +3339,7 @@
       tone: Number(record.booked_pnl) >= 0 ? "good" : "bad",
       detail: `Booked P&L ${formatActiveStrategyPnl(record.booked_pnl)} (${record.booked_pnl_source || "final"})`,
     });
-    return record.id;
+    return archivedTradeId;
   }
 
   async function resetActiveStrategyWorkspace() {
@@ -3014,6 +3371,7 @@
     if (U?.squareOffMultiplierInput) U.squareOffMultiplierInput.value = "1";
     if (U?.basketMonitorTagInput) U.basketMonitorTagInput.value = "";
     if (U?.basketLookupTagInput) U.basketLookupTagInput.value = "";
+    refreshStrategyTargetDeltaOptions(0, null).catch(() => null);
 
     lg(`Active UAT trading workspace reset for ${envLabel(ORDER_ENV)}.`);
     await refreshPlaceOrderSheet(REFRESH_REASON.manual);
@@ -3153,9 +3511,6 @@
       if (U?.strategyPreviewExpiryInput) U.strategyPreviewExpiryInput.value = latestStrategyPreviewState.source.expiry || "";
       if (U?.strategyPreviewExchangeSelect) U.strategyPreviewExchangeSelect.value = latestStrategyPreviewState.source.exchange || "NSE";
       if (U?.strategyPreviewTypeSelect) U.strategyPreviewTypeSelect.value = latestStrategyPreviewState.strategy || "strangle";
-      if (U?.strategyPreviewTargetDeltaSelect && hasCellValue(latestStrategyPreviewState.target_delta)) {
-        U.strategyPreviewTargetDeltaSelect.value = String(latestStrategyPreviewState.target_delta);
-      }
       if (U?.strategyPreviewPairNumberInput) {
         U.strategyPreviewPairNumberInput.value = hasCellValue(latestStrategyPreviewState.payload?.pair_number) ? String(latestStrategyPreviewState.payload.pair_number) : "";
       }
@@ -3182,17 +3537,29 @@
     if (U?.basketMonitorAutoRefreshInput) {
       U.basketMonitorAutoRefreshInput.checked = g(S.basketMonitorAutoRefresh, "1") !== "0";
     }
+    toggleStrategyLongTargetControls(U?.strategyPreviewTypeSelect?.value || latestStrategyPreviewState?.strategy || "strangle");
+    refreshStrategyTargetDeltaOptions(
+      latestStrategyPreviewState?.target_delta,
+      latestStrategyPreviewState?.long_target_delta ?? latestStrategyPreviewState?.payload?.long_target_delta ?? latestTrackedStrategyState?.long_target_delta ?? null
+    ).catch(() => null);
     if (latestMarketOrderState?.request) {
       if (U?.marketOrderTagInput) U.marketOrderTagInput.value = latestMarketOrderState.request.tag || U.marketOrderTagInput.value;
       if (U?.marketOrderRefIdInput && hasCellValue(latestMarketOrderState.request.ref_id)) U.marketOrderRefIdInput.value = String(latestMarketOrderState.request.ref_id);
       if (U?.marketOrderQtyInput && hasCellValue(latestMarketOrderState.request.order_qty)) U.marketOrderQtyInput.value = String(latestMarketOrderState.request.order_qty);
+      if (U?.marketOrderEntryPriceInput) {
+        U.marketOrderEntryPriceInput.value = hasCellValue(latestMarketOrderState.manual_entry_price_rupee)
+          ? String(latestMarketOrderState.manual_entry_price_rupee)
+          : "";
+      }
       if (U?.marketOrderExchangeSelect && latestMarketOrderState.request.exchange) U.marketOrderExchangeSelect.value = latestMarketOrderState.request.exchange;
       if (U?.marketOrderSymbolInput && latestMarketOrderState.instrument?.symbol) U.marketOrderSymbolInput.value = latestMarketOrderState.instrument.symbol;
       if (U?.marketOrderTickSizeInput && hasCellValue(latestMarketOrderState.tick_size_rupee)) U.marketOrderTickSizeInput.value = String(latestMarketOrderState.tick_size_rupee);
       updateMarketResolvedMeta(latestMarketOrderState.instrument?.symbol ? `Restored latest place order for ${latestMarketOrderState.instrument.symbol}.` : "Instrument auto-resolution idle.");
     } else {
+      if (U?.marketOrderEntryPriceInput) U.marketOrderEntryPriceInput.value = "";
       updateMarketResolvedMeta("Instrument auto-resolution idle.");
     }
+    syncMarketOrderCtaLabel();
     if (latestOrderLookupState?.path) {
       if (U?.orderLookupTagInput) U.orderLookupTagInput.value = clean(U.orderLookupTagInput.value || pickToken(latestOrderLookupState.response || {}, ["tag"]));
       if (U?.basketLookupTagInput && /basket/i.test(latestOrderLookupState.path || "")) {
@@ -3282,6 +3649,8 @@
     const exchange = upper(U?.strategyPreviewExchangeSelect?.value || "NSE");
     const strategy = clean(U?.strategyPreviewTypeSelect?.value || "strangle");
     const targetDelta = Number(clean(U?.strategyPreviewTargetDeltaSelect?.value || "0"));
+    const longTargetDeltaText = clean(U?.strategyPreviewLongTargetDeltaSelect?.value || "");
+    const longTargetDelta = strategyNeedsLongTarget(strategy) && longTargetDeltaText ? Number(longTargetDeltaText) : null;
     const pairNumberText = clean(U?.strategyPreviewPairNumberInput?.value);
     const pairNumber = pairNumberText ? Number(pairNumberText) : null;
     const orderQty = Number(clean(U?.trackedOrderQtyInput?.value || ""));
@@ -3292,7 +3661,7 @@
     setBasketSubmitResponse({
       environment: envLabel(ORDER_ENV),
       requested_at_ist: formatIstDateTime(new Date()),
-      request: { asset, expiry, exchange, strategy, target_delta: targetDelta, pair_number: pairNumber, order_qty: orderQty },
+      request: { asset, expiry, exchange, strategy, target_delta: targetDelta, long_target_delta: longTargetDelta, pair_number: pairNumber, order_qty: orderQty },
       status: "submitting",
     });
 
@@ -3354,12 +3723,13 @@
           exchange,
           strategy,
           target_delta: targetDelta,
+          long_target_delta: longTargetDelta,
           pair_number: Number.isInteger(pairNumber) && pairNumber > 0 ? pairNumber : null,
           order_qty: orderQty,
           price_type: clean(U?.deployPreviewPriceTypeSelect?.value || "LIMIT"),
           delivery_type: clean(U?.deployPreviewDeliveryTypeSelect?.value || "ORDER_DELIVERY_TYPE_CNC"),
           multiplier: clean(U?.deployPreviewMultiplierInput?.value || "1"),
-          entry_ltp_buffer_bps: ENTRY_LTP_BUFFER_BPS,
+          entry_ltp_buffer_paise: ENTRY_LTP_BUFFER_PAISE,
         }),
       });
       data = await jsonSafe(res);
@@ -3491,13 +3861,26 @@
     const requestBody = latestSquareOffPreviewState?.square_off_request;
     if (!requestBody?.orders?.length) throw new Error("Build square-off preview before submitting.");
 
-    setSquareOffActionMessage("");
-    setSquareOffSubmitResponse({
+    latestSquareOffSubmitState = {
       environment: envLabel(ORDER_ENV),
       requested_at_ist: formatIstDateTime(new Date()),
       request: requestBody,
+      response: null,
+      basket_id: null,
+      exit_tag: requestBody.tag || "",
+      entry_tag: latestBasketSubmitState?.tag || latestBasketSubmitState?.request?.tag || "",
+      original_basket_id: latestSquareOffPreviewState?.original_basket_id || null,
+      net_targets: latestSquareOffPreviewState?.net_targets || [],
       status: "submitting",
-    });
+      square_off_filled: false,
+      square_off_position_closed: false,
+      message: "Submitting square-off basket...",
+    };
+    saveScopedJson(S.squareOffSubmitState, latestSquareOffSubmitState, ORDER_ENV);
+    setSquareOffSubmitResponse(latestSquareOffSubmitState);
+    setSquareOffActionMessage("Submitting square-off basket...", "info");
+    upsertLiveStrategyBookFromCurrent(activeStrategyStateSnapshot(), latestTrackedStrategyState);
+    setActiveStrategiesResponse();
 
     const response = await req("/orders/v2/basket", {
       method: "POST",
@@ -3507,8 +3890,13 @@
     });
 
     const basketId = pickToken(response, ["basket_id", "basketId", "id"]);
-    const statusText = String(pickToken(response, ["status", "message", "basket_status"]) || "").trim().toLowerCase();
-    if (["submitted", "success", "ok"].includes(statusText) && !hasCellValue(basketId)) {
+    const statusText = String(pickToken(response, ["status", "message", "basket_status"]) || "").trim();
+    const statusNorm = upper(statusText);
+    const submitRejected = ["REJECT", "CANCEL", "FAIL", "ERROR"].some((token) => statusNorm.includes(token));
+    if (submitRejected) {
+      throw new Error(`Broker rejected square-off submit: ${statusText || "unknown status"}.`);
+    }
+    if (["SUBMITTED", "SUCCESS", "OK"].includes(statusNorm) && !hasCellValue(basketId)) {
       throw new Error("Square-off submit returned success without basket_id.");
     }
 
@@ -3519,6 +3907,7 @@
       response,
       basket_id: hasCellValue(basketId) ? basketId : null,
       exit_tag: requestBody.tag || "",
+      entry_tag: latestBasketSubmitState?.tag || latestBasketSubmitState?.request?.tag || "",
       original_basket_id: latestSquareOffPreviewState?.original_basket_id || null,
       net_targets: latestSquareOffPreviewState?.net_targets || [],
       status: "pending_fill",
@@ -3758,7 +4147,13 @@
     if (!latestBasketSubmitState?.request?.orders?.length) {
       throw new Error("No live strategy is available for square off.");
     }
-    if (latestSquareOffSubmitState?.status === "pending_fill") {
+    const latestEntryTag = clean(latestBasketSubmitState?.tag || latestBasketSubmitState?.request?.tag || "");
+    const latestBasketId = hasCellValue(latestBasketSubmitState?.basket_id) ? String(latestBasketSubmitState.basket_id) : "";
+    const pendingSquareOffMatchesActive = Boolean(latestSquareOffSubmitState) && (
+      (latestBasketId && String(latestSquareOffSubmitState?.original_basket_id ?? "") === latestBasketId)
+      || (latestEntryTag && String(latestSquareOffSubmitState?.entry_tag ?? latestSquareOffSubmitState?.request?.entry_tag ?? "") === latestEntryTag)
+    );
+    if (pendingSquareOffMatchesActive && latestSquareOffSubmitState?.status === "pending_fill") {
       throw new Error("Square-off is already pending fill.");
     }
     await buildSquareOffPreview();
@@ -4341,95 +4736,136 @@
     return strikes[Math.floor(strikes.length / 2)];
   }
 
-  function selectStraddleJs(snapshot) {
+  function selectStraddleJs(snapshot, targetDelta = 0) {
     const center = snapshotCenter(snapshot);
-    if (!Number.isFinite(center)) return null;
-    let callsByStrike = new Map((snapshot.calls || []).filter((leg) => leg.delta !== null).map((leg) => [leg.strike, leg]));
-    let putsByStrike = new Map((snapshot.puts || []).filter((leg) => leg.delta !== null).map((leg) => [leg.strike, leg]));
-    if (!callsByStrike.size || !putsByStrike.size) {
-      callsByStrike = new Map((snapshot.calls || []).map((leg) => [leg.strike, leg]));
-      putsByStrike = new Map((snapshot.puts || []).map((leg) => [leg.strike, leg]));
-    }
-    const strikes = Array.from(callsByStrike.keys()).filter((strike) => putsByStrike.has(strike));
+    const callsByStrike = new Map((snapshot.calls || []).map((leg) => [leg.strike, leg]));
+    const putsByStrike = new Map((snapshot.puts || []).map((leg) => [leg.strike, leg]));
+    const strikes = Array.from(callsByStrike.keys()).filter((strike) => putsByStrike.has(strike)).sort((a, b) => a - b);
     if (!strikes.length) return null;
-    const nearest = strikes.reduce((best, strike) => (best === null || Math.abs(strike - center) < Math.abs(best - center) ? strike : best), null);
+    const candidates = [];
+    for (const strike of strikes) {
+      const callLeg = callsByStrike.get(strike);
+      const putLeg = putsByStrike.get(strike);
+      if (!callLeg || !putLeg) continue;
+      if (callLeg.delta === null || putLeg.delta === null) continue;
+      const netDelta = -Number(callLeg.delta) - Number(putLeg.delta);
+      const centerDistance = Number.isFinite(center) ? Math.abs(strike - center) : 0;
+      candidates.push([Math.abs(netDelta - Number(targetDelta || 0)), centerDistance, callLeg, putLeg]);
+    }
+    if (candidates.length) {
+      candidates.sort((a, b) => (a[0] - b[0]) || (a[1] - b[1]));
+      return [candidates[0][2], candidates[0][3]];
+    }
+    const fallbackCenter = Number.isFinite(center) ? center : strikes[Math.floor(strikes.length / 2)];
+    const nearest = strikes.reduce((best, strike) => (best === null || Math.abs(strike - fallbackCenter) < Math.abs(best - fallbackCenter) ? strike : best), null);
     if (!Number.isFinite(nearest)) return null;
     return [callsByStrike.get(nearest), putsByStrike.get(nearest)];
   }
 
-  function selectStrangleJs(snapshot, targetDelta, tolerance = 0.05) {
+  function selectStrangleJs(snapshot, targetDelta) {
     const center = snapshotCenter(snapshot);
     if (!Number.isFinite(center)) return [];
-    const calls = (snapshot.calls || []).filter((leg) => leg.delta !== null && leg.strike >= center).sort((a, b) => a.strike - b.strike);
-    const puts = (snapshot.puts || []).filter((leg) => leg.delta !== null && leg.strike <= center).sort((a, b) => b.strike - a.strike);
+    const calls = (snapshot.calls || []).filter((leg) => leg.delta !== null && leg.strike > center);
+    const puts = (snapshot.puts || []).filter((leg) => leg.delta !== null && leg.strike < center);
     if (!calls.length || !puts.length) {
       const fallbackCalls = (snapshot.calls || []).filter((leg) => leg.strike > center).sort((a, b) => a.strike - b.strike);
       const fallbackPuts = (snapshot.puts || []).filter((leg) => leg.strike < center).sort((a, b) => b.strike - a.strike);
       return fallbackCalls.length && fallbackPuts.length ? [[fallbackCalls[0], fallbackPuts[0]]] : [];
     }
-    const usedPuts = new Set();
-    const pairs = [];
-    for (const call of calls) {
-      const callDelta = Math.abs(Number(call.delta));
-      for (let j = 0; j < puts.length; j += 1) {
-        if (usedPuts.has(j)) continue;
-        const put = puts[j];
-        const putDelta = -Math.abs(Number(put.delta));
-        const netDelta = -callDelta - putDelta;
-        if (Math.abs(netDelta - Number(targetDelta)) <= tolerance) {
-          pairs.push([call, put]);
-          usedPuts.add(j);
-          break;
-        }
-      }
-    }
-    return pairs;
+    const targetAbs = Math.abs(Number(targetDelta));
+    const bestCall = calls.reduce((best, leg) => {
+      if (!best) return leg;
+      const currentScore = [Math.abs(Math.abs(Number(leg.delta)) - targetAbs), Math.abs(Number(leg.strike) - center)];
+      const bestScore = [Math.abs(Math.abs(Number(best.delta)) - targetAbs), Math.abs(Number(best.strike) - center)];
+      return (currentScore[0] < bestScore[0]) || (currentScore[0] === bestScore[0] && currentScore[1] < bestScore[1]) ? leg : best;
+    }, null);
+    const bestPut = puts.reduce((best, leg) => {
+      if (!best) return leg;
+      const currentScore = [Math.abs(Math.abs(Number(leg.delta)) - targetAbs), Math.abs(Number(leg.strike) - center)];
+      const bestScore = [Math.abs(Math.abs(Number(best.delta)) - targetAbs), Math.abs(Number(best.strike) - center)];
+      return (currentScore[0] < bestScore[0]) || (currentScore[0] === bestScore[0] && currentScore[1] < bestScore[1]) ? leg : best;
+    }, null);
+    return bestCall && bestPut ? [[bestCall, bestPut]] : [];
   }
 
   function selectIronButterflyJs(snapshot, targetDelta) {
-    const atmPair = selectStraddleJs(snapshot);
+    const atmPair = selectStraddleJs(snapshot, 0);
     if (!atmPair) return [];
     const [atmCall, atmPut] = atmPair;
     const atmStrike = atmCall.strike;
     const otmCalls = (snapshot.calls || []).filter((leg) => leg.delta !== null && leg.strike > atmStrike);
     const otmPuts = (snapshot.puts || []).filter((leg) => leg.delta !== null && leg.strike < atmStrike);
-    if (!otmCalls.length || !otmPuts.length) return [];
-    let best = null;
-    for (const call of otmCalls) {
-      for (const put of otmPuts) {
-        const atmCallDelta = atmCall.delta !== null ? Math.abs(Number(atmCall.delta)) : 0;
-        const atmPutDelta = atmPut.delta !== null ? -Math.abs(Number(atmPut.delta)) : 0;
-        const callDelta = Math.abs(Number(call.delta));
-        const putDelta = -Math.abs(Number(put.delta));
-        const total = (-atmCallDelta - atmPutDelta) + (callDelta + putDelta);
-        const diff = Math.abs(total - Number(targetDelta));
-        if (!best || diff < best.diff) best = { diff, call, put };
-      }
+    if (!otmCalls.length || !otmPuts.length) {
+      const fallbackCalls = (snapshot.calls || []).filter((leg) => leg.strike > atmStrike).sort((a, b) => a.strike - b.strike);
+      const fallbackPuts = (snapshot.puts || []).filter((leg) => leg.strike < atmStrike).sort((a, b) => b.strike - a.strike);
+      return fallbackCalls.length && fallbackPuts.length ? [[atmCall, atmPut], [fallbackCalls[0], fallbackPuts[0]]] : [];
     }
-    return best ? [[atmCall, atmPut], [best.call, best.put]] : [];
+    const targetAbs = Math.abs(Number(targetDelta));
+    const bestCall = otmCalls.reduce((best, leg) => {
+      if (!best) return leg;
+      const currentScore = [Math.abs(Math.abs(Number(leg.delta)) - targetAbs), Math.abs(Number(leg.strike) - atmStrike)];
+      const bestScore = [Math.abs(Math.abs(Number(best.delta)) - targetAbs), Math.abs(Number(best.strike) - atmStrike)];
+      return (currentScore[0] < bestScore[0]) || (currentScore[0] === bestScore[0] && currentScore[1] < bestScore[1]) ? leg : best;
+    }, null);
+    const bestPut = otmPuts.reduce((best, leg) => {
+      if (!best) return leg;
+      const currentScore = [Math.abs(Math.abs(Number(leg.delta)) - targetAbs), Math.abs(Number(leg.strike) - atmStrike)];
+      const bestScore = [Math.abs(Math.abs(Number(best.delta)) - targetAbs), Math.abs(Number(best.strike) - atmStrike)];
+      return (currentScore[0] < bestScore[0]) || (currentScore[0] === bestScore[0] && currentScore[1] < bestScore[1]) ? leg : best;
+    }, null);
+    return bestCall && bestPut ? [[atmCall, atmPut], [bestCall, bestPut]] : [];
   }
 
-  function selectIronCondorJs(snapshot, targetDelta) {
+  function selectIronCondorJs(snapshot, targetDelta, longTargetDelta = null) {
     const center = snapshotCenter(snapshot);
     if (!Number.isFinite(center)) return [];
     const shortCalls = (snapshot.calls || []).filter((leg) => leg.delta !== null && leg.strike > center).sort((a, b) => a.strike - b.strike);
     const shortPuts = (snapshot.puts || []).filter((leg) => leg.delta !== null && leg.strike < center).sort((a, b) => b.strike - a.strike);
-    let best = null;
-    for (const shortCall of shortCalls) {
-      const longCalls = (snapshot.calls || []).filter((leg) => leg.delta !== null && leg.strike > shortCall.strike);
-      for (const shortPut of shortPuts) {
-        const longPuts = (snapshot.puts || []).filter((leg) => leg.delta !== null && leg.strike < shortPut.strike);
-        for (const longCall of longCalls) {
-          for (const longPut of longPuts) {
-            const total = (-Math.abs(Number(shortCall.delta)) - (-Math.abs(Number(shortPut.delta))))
-              + (Math.abs(Number(longCall.delta)) + (-Math.abs(Number(longPut.delta))));
-            const diff = Math.abs(total - Number(targetDelta));
-            if (!best || diff < best.diff) best = { diff, shortCall, shortPut, longCall, longPut };
-          }
-        }
-      }
+    if (!shortCalls.length || !shortPuts.length) {
+      const fallbackShortCalls = (snapshot.calls || []).filter((leg) => leg.strike > center).sort((a, b) => a.strike - b.strike);
+      const fallbackShortPuts = (snapshot.puts || []).filter((leg) => leg.strike < center).sort((a, b) => b.strike - a.strike);
+      if (!fallbackShortCalls.length || !fallbackShortPuts.length) return [];
+      const shortCall = fallbackShortCalls[0];
+      const shortPut = fallbackShortPuts[0];
+      const longCalls = fallbackShortCalls.filter((leg) => leg.strike > shortCall.strike);
+      const longPuts = fallbackShortPuts.filter((leg) => leg.strike < shortPut.strike);
+      return longCalls.length && longPuts.length ? [[shortCall, shortPut], [longCalls[0], longPuts[0]]] : [];
     }
-    return best ? [[best.shortCall, best.shortPut], [best.longCall, best.longPut]] : [];
+    const targetAbs = Math.abs(Number(targetDelta));
+    const shortCall = shortCalls.reduce((best, leg) => {
+      if (!best) return leg;
+      const currentScore = [Math.abs(Math.abs(Number(leg.delta)) - targetAbs), Math.abs(Number(leg.strike) - center)];
+      const bestScore = [Math.abs(Math.abs(Number(best.delta)) - targetAbs), Math.abs(Number(best.strike) - center)];
+      return (currentScore[0] < bestScore[0]) || (currentScore[0] === bestScore[0] && currentScore[1] < bestScore[1]) ? leg : best;
+    }, null);
+    const shortPut = shortPuts.reduce((best, leg) => {
+      if (!best) return leg;
+      const currentScore = [Math.abs(Math.abs(Number(leg.delta)) - targetAbs), Math.abs(Number(leg.strike) - center)];
+      const bestScore = [Math.abs(Math.abs(Number(best.delta)) - targetAbs), Math.abs(Number(best.strike) - center)];
+      return (currentScore[0] < bestScore[0]) || (currentScore[0] === bestScore[0] && currentScore[1] < bestScore[1]) ? leg : best;
+    }, null);
+    if (!shortCall || !shortPut) return [];
+    const longCalls = (snapshot.calls || []).filter((leg) => leg.delta !== null && leg.strike > shortCall.strike);
+    const longPuts = (snapshot.puts || []).filter((leg) => leg.delta !== null && leg.strike < shortPut.strike);
+    if (!longCalls.length || !longPuts.length) {
+      const fallbackLongCalls = (snapshot.calls || []).filter((leg) => leg.strike > shortCall.strike).sort((a, b) => a.strike - b.strike);
+      const fallbackLongPuts = (snapshot.puts || []).filter((leg) => leg.strike < shortPut.strike).sort((a, b) => b.strike - a.strike);
+      return fallbackLongCalls.length && fallbackLongPuts.length ? [[shortCall, shortPut], [fallbackLongCalls[0], fallbackLongPuts[0]]] : [];
+    }
+    const longTargetAbs = longTargetDelta === null || longTargetDelta === undefined ? targetAbs : Math.abs(Number(longTargetDelta));
+    const longCall = longCalls.reduce((best, leg) => {
+      if (!best) return leg;
+      const currentScore = [Math.abs(Math.abs(Number(leg.delta)) - longTargetAbs), Math.abs(Number(leg.strike) - shortCall.strike)];
+      const bestScore = [Math.abs(Math.abs(Number(best.delta)) - longTargetAbs), Math.abs(Number(best.strike) - shortCall.strike)];
+      return (currentScore[0] < bestScore[0]) || (currentScore[0] === bestScore[0] && currentScore[1] < bestScore[1]) ? leg : best;
+    }, null);
+    const longPut = longPuts.reduce((best, leg) => {
+      if (!best) return leg;
+      const currentScore = [Math.abs(Math.abs(Number(leg.delta)) - longTargetAbs), Math.abs(Number(leg.strike) - shortPut.strike)];
+      const bestScore = [Math.abs(Math.abs(Number(best.delta)) - longTargetAbs), Math.abs(Number(best.strike) - shortPut.strike)];
+      return (currentScore[0] < bestScore[0]) || (currentScore[0] === bestScore[0] && currentScore[1] < bestScore[1]) ? leg : best;
+    }, null);
+    return longCall && longPut ? [[shortCall, shortPut], [longCall, longPut]] : [];
   }
 
   function pairGroupsJs(strategy, pairs) {
@@ -4465,7 +4901,7 @@
     return Object.fromEntries(Object.keys(totals).map((key) => [key, seen[key] ? totals[key] : null]));
   }
 
-  function buildStrategyPreviewPayload(strategy, targetDelta, groups, pairNumber, snapshot) {
+  function buildStrategyPreviewPayload(strategy, targetDelta, groups, pairNumber, snapshot, longTargetDelta = null) {
     let targetGroups = groups;
     if (Number.isInteger(pairNumber) && pairNumber > 0) {
       if (pairNumber > groups.length) throw new Error(`Pair number must be between 1 and ${groups.length}.`);
@@ -4509,6 +4945,7 @@
       expiry: snapshot.expiry,
       strategy,
       target_delta: Number(targetDelta),
+      long_target_delta: longTargetDelta === null || longTargetDelta === undefined ? null : Number(longTargetDelta),
       pair_number: Number.isInteger(pairNumber) && pairNumber > 0 ? pairNumber : null,
       selected_at: new Date().toISOString(),
       baseline_greeks: baseline,
@@ -4526,6 +4963,8 @@
     const exchange = upper(U?.strategyPreviewExchangeSelect?.value || "NSE");
     const strategy = clean(U?.strategyPreviewTypeSelect?.value || "strangle");
     const targetDelta = Number(clean(U?.strategyPreviewTargetDeltaSelect?.value || "0"));
+    const longTargetDeltaText = clean(U?.strategyPreviewLongTargetDeltaSelect?.value || "");
+    const longTargetDelta = strategyNeedsLongTarget(strategy) && longTargetDeltaText ? Number(longTargetDeltaText) : null;
     const pairNumberText = clean(U?.strategyPreviewPairNumberInput?.value);
     const pairNumber = pairNumberText ? Number(pairNumberText) : null;
     if (!asset || !expiry) throw new Error("Asset and expiry are required for strategy preview.");
@@ -4543,6 +4982,7 @@
         exchange,
         strategy,
         target_delta: targetDelta,
+        long_target_delta: longTargetDelta,
         pair_number: Number.isInteger(pairNumber) && pairNumber > 0 ? pairNumber : null,
       }),
     });
@@ -4742,6 +5182,7 @@
     }
     const refId = Number(resolved?.ref_id);
     const qty = Number(clean(U?.marketOrderQtyInput?.value || "1"));
+    const manualEntryPricePaise = parsePriceRupeeInputToPaise(U?.marketOrderEntryPriceInput?.value || "");
     const orderSide = clean(U?.marketOrderSideSelect?.value || "ORDER_SIDE_BUY");
     const delivery = clean(U?.marketOrderDeliverySelect?.value || "ORDER_DELIVERY_TYPE_CNC");
     const validity = clean(U?.marketOrderValiditySelect?.value || "DAY");
@@ -4761,20 +5202,31 @@
       setMarketOrderActionMessage(`Quantity must be a multiple of lot size ${resolved.lot_size}.`);
       throw new Error("Invalid order quantity for lot size.");
     }
+    if (clean(U?.marketOrderEntryPriceInput?.value || "") && (!Number.isInteger(manualEntryPricePaise) || manualEntryPricePaise <= 0)) {
+      setMarketOrderActionMessage("Entry price must be a valid positive rupee value.");
+      throw new Error("Invalid manual entry price.");
+    }
 
-    const ltpInfo = await resolveSingleOrderLtpPaise(refId, symbol, exchange);
-    if (!ltpInfo || !Number.isInteger(ltpInfo.ltpPaise) || ltpInfo.ltpPaise <= 0) {
+    const ltpInfo = await resolveSingleOrderLtpPaise(refId, symbol, exchange).catch(() => null);
+    const hasLiveLtp = Boolean(ltpInfo && Number.isInteger(ltpInfo.ltpPaise) && ltpInfo.ltpPaise > 0);
+    if (!manualEntryPricePaise && !hasLiveLtp) {
       setMarketOrderActionMessage("LTP unavailable for this instrument. Start Master WS or Live OC stream and retry.");
       throw new Error("LTP unavailable for place order.");
     }
 
-    const bufferStyle = upper(orderSide) === "ORDER_SIDE_BUY" ? "buy_positive" : "sell_positive";
-    const rawBufferedOrderPrice = applySignedPriceBuffer(ltpInfo.ltpPaise, SINGLE_ORDER_LTP_BUFFER_BPS, bufferStyle);
     const tickSizePaise = tickSizeOverridePaise || defaultTickSizePaiseForInstrument(resolved, exchange);
-    const bufferedOrderPrice = alignPriceToTick(rawBufferedOrderPrice, tickSizePaise, orderSide);
-    if (!Number.isInteger(bufferedOrderPrice) || bufferedOrderPrice <= 0) {
-      setMarketOrderActionMessage("Buffered order price could not be computed from live LTP.");
-      throw new Error("Buffered order price unavailable.");
+    const bufferStyle = upper(orderSide) === "ORDER_SIDE_BUY" ? "buy_positive" : "sell_positive";
+    const rawBufferedOrderPrice = hasLiveLtp
+      ? applySignedPriceBuffer(ltpInfo.ltpPaise, SINGLE_ORDER_LTP_BUFFER_PAISE, bufferStyle)
+      : null;
+    const rawRequestedOrderPrice = manualEntryPricePaise || rawBufferedOrderPrice;
+    const finalOrderPrice = alignPriceToTick(rawRequestedOrderPrice, tickSizePaise, orderSide);
+    const priceOrigin = manualEntryPricePaise ? "manual_entry_price" : "ltp_buffer";
+    if (!Number.isInteger(finalOrderPrice) || finalOrderPrice <= 0) {
+      setMarketOrderActionMessage(manualEntryPricePaise
+        ? "Manual entry price could not be aligned to a valid tick."
+        : "Buffered order price could not be computed from live LTP.");
+      throw new Error("Order price unavailable.");
     }
 
     const payload = {
@@ -4785,7 +5237,7 @@
       order_delivery_type: delivery,
       validity_type: validity,
       price_type: "LIMIT",
-      order_price: bufferedOrderPrice,
+      order_price: finalOrderPrice,
       tag,
     };
     if (exchange) payload.exchange = exchange;
@@ -4795,16 +5247,19 @@
       request: payload,
       status: "submitting",
       environment: envLabel(ORDER_ENV),
-      ltp_source: ltpInfo.source,
-      ltp_paise: ltpInfo.ltpPaise,
-      ltp_rupee: paiseToRupee(ltpInfo.ltpPaise),
-      ltp_buffer_bps: SINGLE_ORDER_LTP_BUFFER_BPS,
+      price_origin: priceOrigin,
+      manual_entry_price_paise: manualEntryPricePaise,
+      manual_entry_price_rupee: manualEntryPricePaise ? paiseToRupee(manualEntryPricePaise) : null,
+      ltp_source: ltpInfo?.source || "",
+      ltp_paise: hasLiveLtp ? ltpInfo.ltpPaise : null,
+      ltp_rupee: hasLiveLtp ? paiseToRupee(ltpInfo.ltpPaise) : null,
+      ltp_buffer_paise: SINGLE_ORDER_LTP_BUFFER_PAISE,
       tick_size_paise: tickSizePaise,
       tick_size_rupee: paiseToRupee(tickSizePaise),
       raw_buffered_order_price_paise: rawBufferedOrderPrice,
-      raw_buffered_order_price_rupee: paiseToRupee(rawBufferedOrderPrice),
-      buffered_order_price_paise: bufferedOrderPrice,
-      buffered_order_price_rupee: paiseToRupee(bufferedOrderPrice),
+      raw_buffered_order_price_rupee: rawBufferedOrderPrice ? paiseToRupee(rawBufferedOrderPrice) : null,
+      order_price_paise: finalOrderPrice,
+      order_price_rupee: paiseToRupee(finalOrderPrice),
       instrument: resolved || (symbol ? { symbol: upper(symbol), exchange } : null),
     });
 
@@ -4819,16 +5274,19 @@
       environment: envLabel(ORDER_ENV),
       requested_at_ist: formatIstDateTime(new Date()),
       instrument: resolved || (symbol ? { symbol: upper(symbol), exchange } : null),
-      ltp_source: ltpInfo.source,
-      ltp_paise: ltpInfo.ltpPaise,
-      ltp_rupee: paiseToRupee(ltpInfo.ltpPaise),
-      ltp_buffer_bps: SINGLE_ORDER_LTP_BUFFER_BPS,
+      price_origin: priceOrigin,
+      manual_entry_price_paise: manualEntryPricePaise,
+      manual_entry_price_rupee: manualEntryPricePaise ? paiseToRupee(manualEntryPricePaise) : null,
+      ltp_source: ltpInfo?.source || "",
+      ltp_paise: hasLiveLtp ? ltpInfo.ltpPaise : null,
+      ltp_rupee: hasLiveLtp ? paiseToRupee(ltpInfo.ltpPaise) : null,
+      ltp_buffer_paise: SINGLE_ORDER_LTP_BUFFER_PAISE,
       tick_size_paise: tickSizePaise,
       tick_size_rupee: paiseToRupee(tickSizePaise),
       raw_buffered_order_price_paise: rawBufferedOrderPrice,
-      raw_buffered_order_price_rupee: paiseToRupee(rawBufferedOrderPrice),
-      buffered_order_price_paise: bufferedOrderPrice,
-      buffered_order_price_rupee: paiseToRupee(bufferedOrderPrice),
+      raw_buffered_order_price_rupee: rawBufferedOrderPrice ? paiseToRupee(rawBufferedOrderPrice) : null,
+      order_price_paise: finalOrderPrice,
+      order_price_rupee: paiseToRupee(finalOrderPrice),
       request: payload,
       response,
     };
@@ -4862,9 +5320,10 @@
       pnl_anchor_seeded_at: formatIstDateTime(new Date()),
       entry_request: payload,
       entry_response: response,
-      entry_requested_price_paise: bufferedOrderPrice,
+      entry_price_origin: priceOrigin,
+      entry_requested_price_paise: finalOrderPrice,
       entry_fill_price_paise: null,
-      ltp_paise: ltpInfo.ltpPaise,
+      ltp_paise: hasLiveLtp ? ltpInfo.ltpPaise : null,
       live_pnl_rupee: null,
       target_price_paise: null,
       target_exit_inflight: false,
@@ -4878,13 +5337,14 @@
     });
     if (hasCellValue(orderId) && U?.orderLookupIdInput) U.orderLookupIdInput.value = String(orderId);
     if (U?.orderLookupTagInput) U.orderLookupTagInput.value = tag;
-    setMarketOrderActionMessage(
-      `Buffered LTP order submitted with LIMIT @ ${paiseToRupee(bufferedOrderPrice)} from LTP ${paiseToRupee(ltpInfo.ltpPaise)} (${SINGLE_ORDER_LTP_BUFFER_BPS} bps, tick ${paiseToRupee(tickSizePaise)}, source: ${ltpInfo.source}).`,
+    setMarketOrderActionMessage(manualEntryPricePaise
+      ? `Manual entry order submitted with LIMIT @ ${paiseToRupee(finalOrderPrice)} (tick ${paiseToRupee(tickSizePaise)}${hasLiveLtp ? `, live LTP ${paiseToRupee(ltpInfo.ltpPaise)}` : ""}).`
+      : `Buffered LTP order submitted with LIMIT @ ${paiseToRupee(finalOrderPrice)} from LTP ${paiseToRupee(ltpInfo.ltpPaise)} (buffer ${paiseToRupee(SINGLE_ORDER_LTP_BUFFER_PAISE)}, tick ${paiseToRupee(tickSizePaise)}, source: ${ltpInfo.source}).`,
       "success"
     );
     lg(
       `Buffered LTP order submitted in ${envLabel(ORDER_ENV)}: ref_id=${refId}, qty=${qty}, side=${orderSide}, `
-      + `ltp=${ltpInfo.ltpPaise}, order_price=${bufferedOrderPrice}, buffer_bps=${SINGLE_ORDER_LTP_BUFFER_BPS}.`
+      + `ltp=${hasLiveLtp ? ltpInfo.ltpPaise : "na"}, order_price=${finalOrderPrice}, price_origin=${priceOrigin}, buffer_paise=${SINGLE_ORDER_LTP_BUFFER_PAISE}.`
     );
     await refreshPlaceOrderSheet(REFRESH_REASON.manual);
   }
@@ -5139,6 +5599,15 @@
     return stat;
   }
 
+  function appendCompactStatChip(parent, label, value, className = "trade-mini-chip") {
+    const chip = document.createElement("span");
+    chip.className = className;
+    appendStrongText(chip, `${label} `);
+    chip.appendChild(document.createTextNode(String(value ?? "")));
+    parent.appendChild(chip);
+    return chip;
+  }
+
   function appendActiveRailChip(parent, label, value) {
     const chip = document.createElement("span");
     chip.className = "active-rail-chip";
@@ -5165,12 +5634,130 @@
     for (const value of values || []) {
       const option = document.createElement("option");
       option.value = String(value ?? "");
-      if (typeof formatter === "function") {
-        option.textContent = String(formatter(value) ?? "");
-      }
+      option.textContent = typeof formatter === "function"
+        ? String(formatter(value) ?? "")
+        : String(value ?? "");
       fragment.appendChild(option);
     }
     node.appendChild(fragment);
+  }
+
+  function formatTargetDeltaOption(value) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric.toFixed(2) : String(value ?? "");
+  }
+
+  function setSelectValueIfPresent(node, preferredValue, fallbackValue = null) {
+    if (!node) return;
+    const options = Array.from(node.options || []);
+    const preferredText = preferredValue === null || preferredValue === undefined || preferredValue === "" ? null : String(preferredValue);
+    if (preferredText !== null && options.some((option) => option.value === preferredText)) {
+      node.value = preferredText;
+      return;
+    }
+    const fallbackText = fallbackValue === null || fallbackValue === undefined || fallbackValue === "" ? null : String(fallbackValue);
+    if (fallbackText !== null && options.some((option) => option.value === fallbackText)) {
+      node.value = fallbackText;
+      return;
+    }
+    if (options.length) node.value = options[0].value;
+  }
+
+  function strategyNeedsLongTarget(strategyValue) {
+    return clean(strategyValue || "").toLowerCase() === "iron_condor";
+  }
+
+  function toggleStrategyLongTargetControls(strategyValue = null) {
+    const show = strategyNeedsLongTarget(strategyValue || U?.strategyPreviewTypeSelect?.value);
+    if (U?.strategyPreviewLongTargetDeltaLabel) U.strategyPreviewLongTargetDeltaLabel.classList.toggle("hidden", !show);
+    if (U?.strategyPreviewLongTargetDeltaSelect) {
+      U.strategyPreviewLongTargetDeltaSelect.classList.toggle("hidden", !show);
+      U.strategyPreviewLongTargetDeltaSelect.disabled = !show;
+    }
+  }
+
+  async function refreshStrategyLongTargetDeltaOptions(preferredValue = null) {
+    const strategy = clean(U?.strategyPreviewTypeSelect?.value || "strangle");
+    toggleStrategyLongTargetControls(strategy);
+    if (!strategyNeedsLongTarget(strategy)) return;
+    const asset = upper(U?.strategyPreviewAssetInput?.value);
+    const expiry = clean(U?.strategyPreviewExpiryInput?.value);
+    const exchange = upper(U?.strategyPreviewExchangeSelect?.value || "NSE");
+    const targetDelta = clean(U?.strategyPreviewTargetDeltaSelect?.value || "0");
+    const fallbackValue = targetDelta || "0.2";
+    let values = [];
+    let defaultValue = fallbackValue;
+    try {
+      const res = await fetch("/api/strategy/long-target-deltas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          environment: DATA_ENV,
+          sessionToken: tok("session", DATA_ENV),
+          deviceId: devId(),
+          asset,
+          expiry,
+          exchange,
+          strategy,
+          target_delta: Number(targetDelta || 0),
+        }),
+      });
+      const data = await jsonSafe(res);
+      if (!res.ok) throw new Error(data?.error || data?.message || `Long target delta lookup failed (${res.status}).`);
+      values = Array.isArray(data?.target_deltas) ? data.target_deltas : [];
+      defaultValue = hasCellValue(data?.default_target_delta) ? data.default_target_delta : fallbackValue;
+    } catch {
+      values = [];
+      defaultValue = fallbackValue;
+    }
+    if (!values.length) values = [Number(fallbackValue)];
+    replaceValueOptions(U?.strategyPreviewLongTargetDeltaSelect, values, formatTargetDeltaOption);
+    setSelectValueIfPresent(
+      U?.strategyPreviewLongTargetDeltaSelect,
+      preferredValue ?? clean(U?.strategyPreviewLongTargetDeltaSelect?.value || ""),
+      defaultValue
+    );
+    if (U?.strategyPreviewLongTargetDeltaSelect) {
+      U.strategyPreviewLongTargetDeltaSelect.disabled = values.length <= 1 && String(values[0]) === String(fallbackValue);
+    }
+  }
+
+  async function refreshStrategyTargetDeltaOptions(preferredTargetValue = null, preferredLongTargetValue = null) {
+    const strategy = clean(U?.strategyPreviewTypeSelect?.value || "strangle");
+    const asset = upper(U?.strategyPreviewAssetInput?.value);
+    const expiry = clean(U?.strategyPreviewExpiryInput?.value);
+    const exchange = upper(U?.strategyPreviewExchangeSelect?.value || "NSE");
+    let values = DEFAULT_TARGET_DELTAS.slice();
+    let defaultValue = values.includes(0) ? 0 : (values[0] ?? 0);
+    try {
+      const res = await fetch("/api/strategy/target-deltas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          environment: DATA_ENV,
+          sessionToken: tok("session", DATA_ENV),
+          deviceId: devId(),
+          asset,
+          expiry,
+          exchange,
+          strategy,
+        }),
+      });
+      const data = await jsonSafe(res);
+      if (!res.ok) throw new Error(data?.error || data?.message || `Target delta lookup failed (${res.status}).`);
+      if (Array.isArray(data?.target_deltas) && data.target_deltas.length) values = data.target_deltas;
+      if (hasCellValue(data?.default_target_delta)) defaultValue = data.default_target_delta;
+    } catch {
+      values = DEFAULT_TARGET_DELTAS.slice();
+      defaultValue = values.includes(0) ? 0 : (values[0] ?? 0);
+    }
+    replaceValueOptions(U?.strategyPreviewTargetDeltaSelect, values, formatTargetDeltaOption);
+    setSelectValueIfPresent(
+      U?.strategyPreviewTargetDeltaSelect,
+      preferredTargetValue ?? clean(U?.strategyPreviewTargetDeltaSelect?.value || ""),
+      defaultValue
+    );
+    await refreshStrategyLongTargetDeltaOptions(preferredLongTargetValue);
   }
 
   function setActiveOcViewKey(k) {
@@ -5980,6 +6567,8 @@
       resetActiveStrategyButton: document.getElementById("resetActiveStrategyButton"),
       workspacePage: document.getElementById("workspacePage"),
       orderStrategyPage: document.getElementById("orderStrategyPage"),
+      orderWorkspaceTabButtons: Array.from(document.querySelectorAll("[data-order-view-tab]")),
+      orderWorkspaceSections: Array.from(document.querySelectorAll("[data-order-view-group]")),
       pageGroupedCards: Array.from(document.querySelectorAll("[data-page-group]")),
       envUatButton: document.getElementById("envUatButton"),
       envLiveButton: document.getElementById("envLiveButton"),
@@ -6074,6 +6663,7 @@
       resolveMarketRefButton: document.getElementById("resolveMarketRefButton"),
       marketOrderResolvedMeta: document.getElementById("marketOrderResolvedMeta"),
       marketOrderQtyInput: document.getElementById("marketOrderQtyInput"),
+      marketOrderEntryPriceInput: document.getElementById("marketOrderEntryPriceInput"),
       marketOrderSideSelect: document.getElementById("marketOrderSideSelect"),
       marketOrderDeliverySelect: document.getElementById("marketOrderDeliverySelect"),
       marketOrderValiditySelect: document.getElementById("marketOrderValiditySelect"),
@@ -6098,6 +6688,8 @@
       strategyPreviewExchangeSelect: document.getElementById("strategyPreviewExchangeSelect"),
       strategyPreviewTypeSelect: document.getElementById("strategyPreviewTypeSelect"),
       strategyPreviewTargetDeltaSelect: document.getElementById("strategyPreviewTargetDeltaSelect"),
+      strategyPreviewLongTargetDeltaLabel: document.getElementById("strategyPreviewLongTargetDeltaLabel"),
+      strategyPreviewLongTargetDeltaSelect: document.getElementById("strategyPreviewLongTargetDeltaSelect"),
       strategyPreviewPairNumberInput: document.getElementById("strategyPreviewPairNumberInput"),
       trackedOrderQtyInput: document.getElementById("trackedOrderQtyInput"),
       buildStrategyPreviewButton: document.getElementById("buildStrategyPreviewButton"),
@@ -6139,6 +6731,7 @@
       authRequiredBlocks: Array.from(document.querySelectorAll(".auth-required")),
     };
     setActivePage(currentPage);
+    setActiveOrderWorkspaceView(g(S.ordersWorkspaceView, ORDER_WORKSPACE_VIEW.order));
   }
 
   function classifyInstrumentType(it) {
@@ -6637,6 +7230,84 @@
       }
     }
     return rows;
+  }
+
+  function activePnlRows(portfolio) {
+    const groups = [["stock_positions", "STOCK"], ["fut_positions", "FUT"], ["opt_positions", "OPT"]];
+    const rows = [];
+    for (const [field, bucket] of groups) {
+      const arr = Array.isArray(portfolio?.[field]) ? portfolio[field] : [];
+      for (const item of arr) {
+        const qty = Number(item?.qty ?? item?.quantity ?? 0);
+        if (!Number.isFinite(qty) || qty === 0) continue;
+        const pnlRupee = paiseToRupee(item?.pnl);
+        rows.push([
+          bucket,
+          item?.display_name ?? "",
+          item?.symbol ?? "",
+          item?.asset ?? "",
+          item?.exchange ?? "",
+          item?.product ?? "",
+          item?.order_side ?? "",
+          qty,
+          paiseToRupee(item?.ltp ?? item?.last_traded_price),
+          paiseToRupee(item?.avg_price),
+          paiseToRupee(item?.avg_buy_price),
+          paiseToRupee(item?.avg_sell_price),
+          pnlRupee,
+          item?.pnl_chg ?? "",
+          item?.ref_id ?? "",
+        ]);
+      }
+    }
+
+    rows.sort((a, b) => Number(b[12] || 0) - Number(a[12] || 0));
+    return rows;
+  }
+
+  async function refreshActivePnlSheet(reason = REFRESH_REASON.manual, options = {}) {
+    if (!shouldRefreshSheet(SHEET.activePnl, reason)) return;
+    if (!isAuthEnv(ORDER_ENV)) throw new Error(`Please login to ${envLabel(ORDER_ENV)} first.`);
+
+    const silent = Boolean(options.silent);
+    const activateSheet = options.activateSheet !== false;
+    const data = await req("/portfolio/positions", { token: "session", envOverride: ORDER_ENV });
+    const portfolio = data?.portfolio || {};
+    const rows = activePnlRows(portfolio);
+    const stats = portfolio?.position_stats || {};
+    const topRows = [
+      ["sheet", "ActivePnL"],
+      ["environment", envLabel(ORDER_ENV)],
+      ["updated_at_ist", formatIstDateTime(new Date())],
+      ["client_code", portfolio?.client_code || ""],
+      ["open_positions", rows.length],
+      ["realised_pnl", paiseToRupee(stats?.realised_pnl)],
+      ["unrealised_pnl", paiseToRupee(stats?.unrealised_pnl)],
+      ["total_pnl", paiseToRupee(stats?.total_pnl)],
+      ["total_pnl_chg", stats?.total_pnl_chg ?? ""],
+      [],
+    ];
+    const sections = [{
+      title: "ACTIVE POSITIONS",
+      headers: ["bucket", "display_name", "symbol", "asset", "exchange", "product", "side", "qty", "ltp", "avg_price", "avg_buy_price", "avg_sell_price", "pnl", "pnl_chg", "ref_id"],
+      rows: rows.length ? rows : [["", "No open positions found.", "", "", "", "", "", "", "", "", "", "", "", "", ""]],
+    }];
+
+    await writeSections("ActivePnL", topRows, sections, { activateSheet });
+    if (!silent) lg(`Active PnL sheet refreshed with ${rows.length} open position${rows.length === 1 ? "" : "s"}.`);
+  }
+
+  async function openActivePnlSheet() {
+    if (!officeReady) throw new Error("Office is not ready.");
+    await refreshActivePnlSheet(REFRESH_REASON.manual, { activateSheet: true });
+    await Excel.run(async (ctx) => {
+      let sh = ctx.workbook.worksheets.getItemOrNullObject("ActivePnL");
+      await ctx.sync();
+      if (sh.isNullObject) sh = ctx.workbook.worksheets.add("ActivePnL");
+      sh.activate();
+      await ctx.sync();
+    });
+    lg("Opened ActivePnL sheet.");
   }
 
   async function refreshPositions() {
@@ -8309,6 +8980,7 @@
         rows: [
           ["symbol", active.symbol || "", "strategy", active.strategy || ""],
           ["qty", hasCellValue(active.order_qty) ? String(active.order_qty) : "", "delta", hasCellValue(active.target_delta) ? String(active.target_delta) : ""],
+          ["long_delta", hasCellValue(active.long_target_delta) ? String(active.long_target_delta) : "", "pair_number", hasCellValue(active.pair_number) ? String(active.pair_number) : ""],
           ["entry_at", active.entry_at || "", "updated_at", active.updated_at || ""],
           ["entry_price", hasCellValue(active.entry_price_once) ? String(round2(Number(active.entry_price_once))) : "", "live_price", hasCellValue(active.live_strategy_ltp) ? String(round2(Number(active.live_strategy_ltp))) : ""],
           ["live_pnl", hasCellValue(active.live_pnl) ? String(round2(Number(active.live_pnl))) : "", "status", active.basket_status || active.statusText || ""],
@@ -8322,7 +8994,8 @@
         rows: [
           ["symbol", tracked.symbol || "", "strategy", tracked.strategy || ""],
           ["qty", Number.isFinite(trackedQty) && trackedQty > 0 ? String(trackedQty) : "", "delta", hasCellValue(tracked.target_delta) ? String(tracked.target_delta) : ""],
-          ["selected_at", tracked.selected_at || "", "pair_number", hasCellValue(tracked.pair_number) ? String(tracked.pair_number) : ""],
+          ["long_delta", hasCellValue(tracked.long_target_delta) ? String(tracked.long_target_delta) : "", "pair_number", hasCellValue(tracked.pair_number) ? String(tracked.pair_number) : ""],
+          ["selected_at", tracked.selected_at || "", "", ""],
           ["live_price", Number.isFinite(trackedLiveRupee) ? String(round2(Number(trackedLiveRupee))) : "", "status", "Tracked only. Deploy basket to make this strategy live."],
         ],
       });
@@ -9118,6 +9791,7 @@
         await restoreStreamsFromStorage("login");
       } else {
         setWorkspaceReady(true);
+        await reconcileSingleTradesAgainstOpenPositions({ silent: true }).catch(() => null);
         if (pendingOrdersLoginRedirect && isAuthEnv(ORDER_ENV)) {
           pendingOrdersLoginRedirect = false;
           setActivePage(PAGE.orders);
@@ -9146,10 +9820,38 @@
     U.marketOrderExchangeSelect?.addEventListener("change", () => {
       if (clean(U.marketOrderSymbolInput?.value)) resolveMarketRefFromInputs({ silent: true, autoSyncOnMiss: true });
     });
-    U.placeMarketOrderButton?.addEventListener("click", () => busy(U.placeMarketOrderButton, placeSingleMarketOrder).catch((e) => {
+    U.marketOrderEntryPriceInput?.addEventListener("input", () => {
+      syncMarketOrderCtaLabel();
+    });
+    U.strategyPreviewAssetInput?.addEventListener("change", () => {
+      refreshStrategyTargetDeltaOptions().catch(() => null);
+    });
+    U.strategyPreviewAssetInput?.addEventListener("blur", () => {
+      refreshStrategyTargetDeltaOptions().catch(() => null);
+    });
+    U.strategyPreviewExpiryInput?.addEventListener("change", () => {
+      refreshStrategyTargetDeltaOptions().catch(() => null);
+    });
+    U.strategyPreviewExpiryInput?.addEventListener("blur", () => {
+      refreshStrategyTargetDeltaOptions().catch(() => null);
+    });
+    U.strategyPreviewExchangeSelect?.addEventListener("change", () => {
+      refreshStrategyTargetDeltaOptions().catch(() => null);
+    });
+    U.strategyPreviewTypeSelect?.addEventListener("change", () => {
+      toggleStrategyLongTargetControls(U.strategyPreviewTypeSelect.value);
+      refreshStrategyTargetDeltaOptions().catch(() => null);
+    });
+    U.strategyPreviewTargetDeltaSelect?.addEventListener("change", () => {
+      refreshStrategyLongTargetDeltaOptions().catch(() => null);
+    });
+    U.placeMarketOrderButton?.addEventListener("click", () => {
+      setActiveOrderWorkspaceView(ORDER_WORKSPACE_VIEW.order);
+      busy(U.placeMarketOrderButton, placeSingleMarketOrder).catch((e) => {
       setMarketOrderActionMessage(e.message || String(e));
       lg(e.message || String(e), true);
-    }));
+      });
+    });
     U.fetchOrdersButton?.addEventListener("click", () => busy(U.fetchOrdersButton, fetchDayOrders).catch((e) => {
       setOrderLookupActionMessage(e.message || String(e));
       lg(e.message || String(e), true);
@@ -9166,6 +9868,18 @@
       showCompletedTradeHistory = !showCompletedTradeHistory;
       setCompletedTradesResponse(latestClosedTradeHistoryState.length ? latestClosedTradeHistoryState : "No closed trades archived yet.");
     });
+    for (const btn of U.orderWorkspaceTabButtons || []) {
+      btn.addEventListener("click", () => {
+        const nextView = btn.getAttribute("data-order-view-tab");
+        setActiveOrderWorkspaceView(nextView);
+        if (normalizeOrderWorkspaceView(nextView) === ORDER_WORKSPACE_VIEW.live) {
+          busy(btn, openActivePnlSheet).catch((e) => {
+            showOrdersAuthPopup(e.message || String(e));
+            lg(e.message || String(e), true);
+          });
+        }
+      });
+    }
     U.resetActiveStrategyButton?.addEventListener("click", () => busy(U.resetActiveStrategyButton, resetActiveStrategyWorkspace).catch((e) => {
       setStrategyPreviewActionMessage(e.message || String(e));
       lg(e.message || String(e), true);
@@ -9175,6 +9889,7 @@
       lg(e.message || String(e), true);
     }));
     U.trackStrategyPreviewButton?.addEventListener("click", () => busy(U.trackStrategyPreviewButton, async () => {
+      setActiveOrderWorkspaceView(ORDER_WORKSPACE_VIEW.strategy);
       await openPlaceOrderSheet();
       await ensureOptionChainForTrack();
       await buildStrategyPreviewWithRetry(15, 1000);
@@ -9187,6 +9902,7 @@
     }));
     U.masterDeployButton?.addEventListener("click", () => busy(U.masterDeployButton, async () => {
       const deployResult = await submitDeployBasket();
+      setActiveOrderWorkspaceView(ORDER_WORKSPACE_VIEW.live);
       const hasBasketId = hasCellValue(deployResult?.basketId);
       const verified = Boolean(deployResult?.verified);
       if (hasBasketId || verified) {
@@ -9268,6 +9984,14 @@
         }
         return;
       }
+    });
+    U.singleTradesResponse?.addEventListener("input", (ev) => {
+      const input = ev.target?.closest?.("input[data-input]");
+      if (!input) return;
+      const tradeId = clean(input.getAttribute("data-trade-id") || input.closest?.("[data-trade-id]")?.getAttribute?.("data-trade-id") || "");
+      const fieldName = clean(input.getAttribute("data-input") || "");
+      if (!tradeId || !fieldName) return;
+      setSingleTradeInputDraft(tradeId, fieldName, input.value || "");
     });
     U.buildDeployPreviewButton?.addEventListener("click", () => busy(U.buildDeployPreviewButton, buildDeployBasketPreview).catch((e) => {
       setDeployPreviewActionMessage(e.message || String(e));
@@ -9379,10 +10103,11 @@
       replaceValueOptions(
         U.strategyPreviewTargetDeltaSelect,
         DEFAULT_TARGET_DELTAS,
-        (delta) => Number(delta).toFixed(1)
+        formatTargetDeltaOption
       );
       U.strategyPreviewTargetDeltaSelect.value = "0";
     }
+    toggleStrategyLongTargetControls(U?.strategyPreviewTypeSelect?.value || "strangle");
     if (U.marketOrderTagInput && !clean(U.marketOrderTagInput.value)) {
       U.marketOrderTagInput.value = "excel_market_order";
     }
@@ -9435,6 +10160,9 @@
     if (liveSessionOk || uatSessionOk) {
       await ensureInstrumentsSheetOnLaunch().catch((e) => lg(`Instrument sync on launch failed: ${e.message || String(e)}`, true));
     }
+    if (uatSessionOk) {
+      await reconcileSingleTradesAgainstOpenPositions({ silent: true }).catch(() => null);
+    }
     await refreshPlaceOrderSheet(REFRESH_REASON.system);
     await focusPanelForActiveSheet().catch(() => null);
     syncSingleTradeQuotePoller();
@@ -9446,8 +10174,11 @@
         authUi();
       }
       await checkServer({ silent: true }).catch(() => null);
-      if (isAuthEnv(ORDER_ENV) && liveSingleTrades().length) {
-        await reconcileSingleTradeBook({ silent: true }).catch(() => null);
+      if (isAuthEnv(ORDER_ENV)) {
+        await reconcileSingleTradesAgainstOpenPositions({ silent: true }).catch(() => null);
+        if (liveSingleTrades().length) {
+          await reconcileSingleTradeBook({ silent: true }).catch(() => null);
+        }
       }
       if (isAuthEnv(ORDER_ENV) && basketMonitorAutoRefreshEnabled()) {
         const basketTag = clean(U?.basketMonitorTagInput?.value || latestDeployPreviewState?.flexi_order_request?.tag || latestBasketMonitorState?.tag || "");
@@ -9471,6 +10202,9 @@
       if (latestTrackedStrategyState?.legs?.length && !latestTrackedStrategyState?.closed) {
         setActiveStrategiesResponse();
         await refreshPlaceOrderSheet(REFRESH_REASON.system).catch(() => null);
+      }
+      if (isAuthEnv(ORDER_ENV) && currentOrderWorkspaceView === ORDER_WORKSPACE_VIEW.live) {
+        await refreshActivePnlSheet(REFRESH_REASON.system, { activateSheet: false, silent: true }).catch(() => null);
       }
     }, 15000);
   }
